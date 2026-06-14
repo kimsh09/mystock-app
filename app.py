@@ -1,45 +1,26 @@
 import streamlit as st
+import FinanceDataReader as fdr
 import yfinance as yf
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from bs4 import BeautifulSoup
-import re
-import math
-import json
-import difflib
 import ta
+import plotly.graph_objects as go
+import warnings
+import numpy as np
+import requests
+import re
+import random
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+import json
+import os
+import math
 
-# 🚀 [서버 에러 원천 차단] yfinance 통합형 초경량 주가 수집 엔진
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_stock_data_clean(ticker_or_code, is_usa):
-    try:
-        if is_usa:
-            # 미국 주식 (예: AAPL, TSLA)
-            symbol = ticker_or_code.upper().strip()
-        else:
-            # 한국 주식 (예: 005930 ➡️ 005930.KS, 247540 ➡️ 247540.KQ)
-            code = str(ticker_or_code).strip().zfill(6)
-            # 안전하게 코스피(.KS)로 먼저 찌르고 실패하면 코스닥(.KQ)으로 시도하는 2중 방어선
-            symbol = f"{code}.KS"
-            df = yf.download(symbol, period="3y", progress=False)
-            if df.empty or len(df) < 5:
-                symbol = f"{code}.KQ"
-        
-        # 데이터 다운로드
-        df = yf.download(symbol, period="3y", progress=False)
-        if df.empty:
-            return pd.DataFrame()
-            
-        # 데이터 컬럼 정제 (서버 환경 대응 표준화)
-        df = df.reset_index()
-        df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-        
-        # 대소문자 통일 및 필수 컬럼 검증
-        df.rename(columns={'Date': 'Date', 'Open': 'Open', 'High': 'High', 'Low': 'Low', 'Close': 'Close', 'Volume': 'Volume'}, inplace=True)
-        return df
-    except:
-        return pd.DataFrame()
+# 파일 기반 영구 저장용 헬퍼 함수
+def load_local_db(file_name, default_data):
+    if os.path.exists(file_name):
+        with open(file_name, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return default_data
 
 def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
