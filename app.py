@@ -610,7 +610,7 @@ if pure_code:
             foreigners, institution, retail, latest_price, n_open, n_high, n_low, n_vol = get_cached_naver_supply(pure_code)
             
             if (latest_price == 0 or pd.isna(latest_price)) and not df_raw.empty: 
-                latest_price = float(df_raw.iloc[-1]['Close'])
+                latest_price = float(df_raw['Close'].iloc[-1])
 
             # 🚀 [수정 3] 고정값이 아닌 실시간 함수로 데이터 연동
         if is_usa:
@@ -628,7 +628,7 @@ if pure_code:
             foreigners, institution, retail, latest_price, n_open, n_high, n_low, n_vol = get_cached_naver_supply(pure_code)
             
             if (latest_price == 0 or pd.isna(latest_price)) and not df_raw.empty: 
-                latest_price = float(df_raw.iloc[-1]['Close'])
+                latest_price = float(df_raw['Close'].iloc[-1])
 
             pbr_val, net_per, net_growth = get_real_fundamentals(pure_code, is_usa, yahoo_ticker)
 
