@@ -237,7 +237,7 @@ def fetch_yf_data(ticker, period="2y"):
     try:
         df = yf.Ticker(ticker).history(period=period)
         if not df.empty:
-            # 💡 중요: 함수 내부에서는 이름을 모두 'df'로 맞춰야 합니다!
+            # yfinance 멀티인덱스 및 컬럼명 정제
             df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
             df.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
             if 'Volume' not in df.columns: df['Volume'] = 0
@@ -625,11 +625,18 @@ if pure_code:
         if df_raw.empty or len(df_raw) < 5:
             safe_price = latest_price if (latest_price > 0 and not pd.isna(latest_price)) else 10000.0
             mock_dates = [datetime.today() - timedelta(days=i) for i in range(20, -1, -1)]
+            # 💡 기존 소문자 컬럼명을 대문자 표준(Open, High, Low, Close, Volume)으로 수정합니다.
             df_raw = pd.DataFrame({
-                'Close': [safe_price]*21, 'Open': [safe_price]*21,
-                'High': [safe_price]*21, 'Low': [safe_price]*21, 'Volume': [10000]*21
+                'Open': [safe_price] * 21,
+                'High': [safe_price] * 21,
+                'Low': [safe_price] * 21,
+                'Close': [safe_price] * 21,
+                'Volume': [1000] * 21
             }, index=mock_dates)
-            latest_price = safe_price
+        
+        # 💡 혹시 모를 누락을 방지하기 위해 최종적으로 한 번 더 컬럼명을 정제합니다.
+        df_raw.columns = [col[0] if isinstance(col, tuple) else col for col in df_raw.columns]
+        df_raw.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
 
         if latest_price > 0 and not is_usa:
             last_idx = df_raw.index[-1]
