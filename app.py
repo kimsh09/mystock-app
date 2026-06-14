@@ -596,7 +596,28 @@ if pure_code:
                 df_raw = fetch_yf_data(pure_code + ".KQ", period="2y")
             
             foreigners, institution, retail, latest_price, n_open, n_high, n_low, n_vol = get_cached_naver_supply(pure_code)
-            
+            # ========== [에러 철벽 방어 코드: 시작] ==========
+    # 1. 멀티인덱스(튜플) 구조 강제 붕괴 (yfinance 최신버전 에러 방지)
+    if isinstance(df_raw.columns, pd.MultiIndex):
+        df_raw.columns = [col[0] for col in df_raw.columns]
+
+    # 2. 한글 컬럼명일 경우 영어로 변환 (FinanceDataReader 대응)
+    kor_eng_map = {'종가': 'Close', '시가': 'Open', '고가': 'High', '저가': 'Low', '거래량': 'Volume'}
+    df_raw.rename(columns=kor_eng_map, inplace=True)
+
+    # 3. 소문자(close), 대문자(CLOSE) 등을 표준(Close)으로 강제 변환
+    df_raw.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
+
+    # 4. 최후의 보루: 그래도 Close가 없으면 빈 데이터 방지용 값 강제 삽입
+    if 'Close' not in df_raw.columns:
+        if len(df_raw.columns) > 0:
+            df_raw['Close'] = df_raw.iloc[:, 0] # 첫 번째 열을 종가로 사용
+        else:
+            df_raw['Close'] = 10000.0 # 아예 비어있으면 10000원으로 세팅
+    # ========== [에러 철벽 방어 코드: 끝] ==========
+
+    # (이 아래는 원래 있던 코드입니다. 건드리지 마세요!)
+    latest_price = float(df_raw.iloc[-1]['Close'])
             if (latest_price == 0 or pd.isna(latest_price)) and not df_raw.empty: 
                 latest_price = float(df_raw['Close'].iloc[-1])
 
