@@ -237,11 +237,10 @@ def fetch_yf_data(ticker, period="2y"):
     try:
         df = yf.Ticker(ticker).history(period=period)
         if not df.empty:
-            # 🔥🔥🔥 [여기에 딱 이 3줄을 삽입합니다] 🔥🔥🔥
+            # 💡 중요: 함수 내부에서는 이름을 모두 'df'로 맞춰야 합니다!
             df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
             df.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
             if 'Volume' not in df.columns: df['Volume'] = 0
-            # 🔥🔥🔥 l l l l l l l l l l l l l l l l 🔥🔥🔥
         return df
     except:
         return pd.DataFrame()
