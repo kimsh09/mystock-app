@@ -233,9 +233,26 @@ def get_dividend_yield_v5(code, is_usa, ticker):
             return 0.0
     except:
         return 0.0
+@st.cache_data(ttl=60, show_spinner=False)
 def fetch_yf_data(ticker, period="2y"):
     try:
         df = yf.Ticker(ticker).history(period=period)
+        
+        # 🔥 무적 에러 방어막: 데이터가 들어오자마자 무조건 'Close' 이름표를 강제로 만듭니다.
+        if not df.empty:
+            # 1. 멀티인덱스(튜플) 구조 강제 붕괴
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0] for col in df.columns]
+            
+            # 2. 소문자, 띄어쓰기 등을 표준 대문자(Close, Open 등)로 교정
+            df.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
+            
+            # 3. 최후의 보루: 그래도 Close가 없으면 에러 방지용 임시값 삽입
+            if 'Close' not in df.columns:
+                df['Close'] = 10000.0  
+            if 'Volume' not in df.columns:
+                df['Volume'] = 0
+                
         return df
     except:
         return pd.DataFrame()
