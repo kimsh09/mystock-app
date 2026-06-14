@@ -1,21 +1,4 @@
 import streamlit as st
-import FinanceDataReader as fdr
-import yfinance as yf
-import pandas as pd
-import ta
-import plotly.graph_objects as go
-import warnings
-import numpy as np
-import requests
-import re
-import random
-from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-import json
-import os
-import math
-
-import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
