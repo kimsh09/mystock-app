@@ -1,9 +1,5 @@
-FinanceDataReader
 yfinance
 pandas
-numpy
 plotly
 beautifulsoup4
-requests
-scipy
 ta
