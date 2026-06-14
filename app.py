@@ -99,7 +99,7 @@ def get_macro_market_data():
     tickers = {"나스닥 100": "^NDX", "VIX (공포지수)": "^VIX", "원/달러 환율": "KRW=X"}
     for name, t in tickers.items():
         try:
-            df = yf.Ticker(t).history(period="1mo").dropna(subset=['Close'])
+            df = yf.Ticker(t).history(period="1mo")
             if not df.empty and len(df) >= 2:
                 close = float(df['Close'].iloc[-1])
                 prev = float(df['Close'].iloc[-2])
@@ -235,27 +235,28 @@ def get_dividend_yield_v5(code, is_usa, ticker):
         return 0.0
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_yf_data(ticker, period="2y"):
+    # 에러가 나더라도 무조건 Close를 뱉어내도록 하는 안전 뼈대
+    safe_df = pd.DataFrame(columns=['Open', 'High', 'Low', 'Close', 'Volume'])
     try:
         df = yf.Ticker(ticker).history(period=period)
         
-        # 🔥 무적 에러 방어막: 데이터가 들어오자마자 무조건 'Close' 이름표를 강제로 만듭니다.
-        if not df.empty:
-            # 1. 멀티인덱스(튜플) 구조 강제 붕괴
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = [col[0] for col in df.columns]
+        if df.empty:
+            return safe_df
+        
+        # 1. 튜플(다중) 컬럼명 강제 풀기 (yfinance 최신버전 에러 완벽 차단)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0] for col in df.columns]
             
-            # 2. 소문자, 띄어쓰기 등을 표준 대문자(Close, Open 등)로 교정
-            df.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
+        # 2. 소문자나 공백이 섞여 있어도 무조건 표준(Close 등)으로 대문자 변환
+        df.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
+        
+        # 3. 만약 그래도 Close가 없다면 안전 뼈대 반환
+        if 'Close' not in df.columns:
+            return safe_df
             
-            # 3. 최후의 보루: 그래도 Close가 없으면 에러 방지용 임시값 삽입
-            if 'Close' not in df.columns:
-                df['Close'] = 10000.0  
-            if 'Volume' not in df.columns:
-                df['Volume'] = 0
-                
         return df
     except:
-        return pd.DataFrame()
+        return safe_df
 # 🚀 [추가 1] 기업 펀더멘탈 실시간 스크래핑 엔진 (고정 버그 해결)
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_real_fundamentals(code, is_usa, ticker):
@@ -596,7 +597,7 @@ if pure_code:
     with st.spinner(f"'{target_display_name}' 분석 데이터 동기화 중..."):
         
         if is_usa:
-            df_raw = fetch_yf_data(yahoo_ticker, period="2y").dropna(subset=['Close'])
+            df_raw = fetch_yf_data(yahoo_ticker, period="2y")
             unit = "$"
             latest_price = df_raw['Close'].iloc[-1] if not df_raw.empty else 0.0
             foreigners, institution, retail = 0.0, 0.0, 0.0
@@ -614,7 +615,7 @@ if pure_code:
 
             # 🚀 [수정 3] 고정값이 아닌 실시간 함수로 데이터 연동
         if is_usa:
-            df_raw = fetch_yf_data(yahoo_ticker, period="2y").dropna(subset=['Close'])
+            df_raw = fetch_yf_data(yahoo_ticker, period="2y")
             unit = "$"
             latest_price = df_raw['Close'].iloc[-1] if not df_raw.empty else 0.0
             foreigners, institution, retail = 0.0, 0.0, 0.0
