@@ -95,7 +95,10 @@ def get_macro_market_data():
             res["KOSPI"] = (close_k, chg_k)
     except:
         res["KOSPI"] = (0.0, 0.0)
-        
+        # 📌 데이터 오류 방지용 안전장치 (이 위치가 정답입니다)
+    df.columns = [str(c).strip().capitalize() for c in df.columns]
+    if 'Volume' not in df.columns: df['Volume'] = 0
+    df.rename(columns={'Close': 'Close', 'Open': 'Open', 'High': 'High', 'Low': 'Low'}, inplace=True)
     tickers = {"나스닥 100": "^NDX", "VIX (공포지수)": "^VIX", "원/달러 환율": "KRW=X"}
     for name, t in tickers.items():
         try:
