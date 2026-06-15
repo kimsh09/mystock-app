@@ -642,10 +642,21 @@ if pure_code:
             safe_price = latest_price if (latest_price > 0 and not pd.isna(latest_price)) else 10000.0
             mock_dates = [datetime.today() - timedelta(days=i) for i in range(20, -1, -1)]
             df_raw = pd.DataFrame({
-                'Close': [safe_price]*21, 'Open': [safe_price]*21,
-                'High': [safe_price]*21, 'Low': [safe_price]*21, 'Volume': [10000]*21
+                'Close': [safe_price]*21,
+                'Open': [safe_price]*21,
+                'High': [safe_price]*21,
+                'Low': [safe_price]*21,
+                'Volume': [10000]*21
             }, index=mock_dates)
-            latest_price = safe_price
+
+            # 🔥🔥🔥 [여기에 딱 이 3줄만 복사해서 끼워넣으십시오] 🔥🔥🔥
+            df_raw = df_raw.reset_index()
+            df_raw.rename(columns={'index': 'Date'}, inplace=True)
+            df_raw.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
+            # 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+
+            unit = "달러" if is_usa else "원"
+            latest_price = float(df_raw.iloc[-1]['Close'])
 
         if latest_price > 0 and not is_usa:
             last_idx = df_raw.index[-1]
