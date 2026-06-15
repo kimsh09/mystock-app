@@ -86,7 +86,12 @@ def get_macro_market_data():
     res = {}
     vix_trend = "안정"
     usd_trend = "안정"
-    
+
+@st.cache_data(ttl=3600) # 1시간 동안 데이터를 캐싱
+def get_data(ticker):
+    # 데이터 불러오는 로직
+    return df
+
     try:
         df_k = fdr.DataReader('KS11', start=(datetime.today() - timedelta(days=30)).strftime('%Y-%m-%d'))
         if not df_k.empty:
@@ -746,7 +751,12 @@ if pure_code:
             hovermode='x unified', height=360, template="plotly_white", margin=dict(l=5, r=150, t=30, b=10),
             shapes=shapes, annotations=annotations, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        st.plotly_chart(fig_price, use_container_width=True)
+if df.empty:
+    st.warning("⚠️ 해당 종목의 데이터를 찾을 수 없거나 상장 폐지된 종목입니다.")
+else:
+    # 🚨 여기가 원래 차트/표를 그리던 코드 자리입니다!
+    st.plotly_chart(fig_price, use_container_width=True)
+    st.dataframe(df_raw, use_container_width=True)
 
     st.markdown("##### 🧭 AI 매수 적합도 점수 산출 세부 명세표")
     st.table(pd.DataFrame(score_details))
@@ -1073,8 +1083,8 @@ if pure_code:
     st.divider()
     info_left_col, info_right_col = st.columns(2)
     with info_left_col:
-        st.markdown(f"### 📰 오늘의 실시간 호재 레이더")
-        sidebar_code_url = f"https://finance.naver.com/item/news.naver?code={pure_code}"
+        with st.expander("📰 오늘의 실시간 호재 레이더 (클릭해서 펼치기)"):
+            sidebar_code_url = f"https://finance.naver.com/item/news.naver?code={pure_code}"
         st.markdown(f"🔗 **[📢 {target_display_name} 금융 실시간 뉴스룸 바로가기]({sidebar_code_url})**")
         main_news = get_main_live_news(target_display_name, count=4)
         for idx, n_item in enumerate(main_news):
@@ -1152,25 +1162,35 @@ if pure_code:
     st.info(f"🔵 **[AI 통합 포지션 가이드]** 주가의 현재 위치는 {str_disparity} 또한 {str_rsi} {str_ratio} 상단의 AI 적합도 점수({buy_timing_score}점)를 신뢰하여 켈리 공식이 제안하는 비중만큼만 기계적으로 분할 진입하십시오.")
 
     st.markdown("#### 🚨 윌리엄 오닐의 CAN SLIM 및 피터린치 실적 분석 시스템")
-    c_col1, c_col2, c_col3, c_col4 = st.columns(4)
+    
+    # 💡 1. 윗줄 2칸 만들기
+    c_col1, c_col2 = st.columns(2)
+    
     with c_col1: 
         st.metric(label="자산 가치 비율 (PBR)", value=f"{pbr_val:.2f}배")
         if pbr_val < 0.7: st.success("🟢 [매우 우수] 자산 청산가치 이하 안전지대")
         elif pbr_val < 1.3: st.info("🔵 [우수] 확실한 저평가 상태")
         else: st.code("⚪ [보통] 표준 멀티플 영역")
+        
     with c_col2: 
         st.metric(label="미래형 추정 PER", value=f"{net_per:.2f}배")
         if net_per < 8.0: st.success("🟢 [매우 우수] 이익 체력 대비 저평가")
-        elif net_per < 15.0: st.info("🔵 [우수] 무난한 밸류 밴드")
-        else: st.code("⚪ [보통] 업계 표준 스탠스")
-    with c_col3: 
-        st.metric(label="이익(EPS) 추정 성장률", value=f"{net_growth:+.1f}%")
-        if net_growth > 20.0: st.success("🟢 [매우 우수] 우상향 주도주 체력")
-        else: st.info("🔵 [우수] 견고한 성장 속도")
+        # ...(여기에 원래 있던 c_col2 코드 유지)...
+
+    # 💡 2. 중간에 시각적 구분선 넣기
+    st.markdown("---") 
+    
+    # 💡 3. 아랫줄 2칸 새로 만들기
+    c_col3, c_col4 = st.columns(2)
+    
+    with c_col3:
+        # 🚨 파트너님의 원본 텍스트 파일에 있던 c_col3 코드를 여기에 그대로 두셔야 합니다!
+        # (예: st.metric(label="자기자본이익률(ROE)", ... 같은 코드들)
+        pass # <- 만약 당장 넣을 코드가 없다면 임시로 이 단어를 지우고 pass 라고 적어두세요.
+        
     with c_col4:
-        st.metric(label="미래형 PEG 지표", value=f"{peg_val:.2f}배")
-        if peg_val <= 0.5: st.success("🟢 [매우 우수] 피터린치식 가성비 타점")
-        else: st.info("🔵 [우수] 성장성 대비 합리적 주가")
+        # 🚨 파트너님의 원본 텍스트 파일에 있던 c_col4 코드를 여기에 그대로 두셔야 합니다!
+        pass # <- 당장 코드가 없다면 여기에 pass 라고 적어야 에러가 안 납니다.
         
     st.divider()
     st.caption("⚖️ **법적 면책 조항 (Legal Disclaimer):** 본 시스템이 제공하는 모든 가치 평가, 적합도 점수, 레이더 신호 및 투자 가이드라인은 개인의 투자 판단을 돕기 위한 보조 참고 자료입니다. API 통신 지연이나 알고리즘 연산에 의한 데이터 오류가 발생할 수 있으며, 어떠한 경우에도 투자 결과에 대한 법적 책임 소재 및 증빙 자료로 사용될 수 없습니다. 최종 투자 결정권과 책임은 전적으로 투자자 본인에게 있습니다.")
