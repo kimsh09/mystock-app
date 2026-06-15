@@ -1,5 +1,9 @@
+streamlit
+finance-datareader
 yfinance
 pandas
-plotly
-beautifulsoup4
+numpy
 ta
+plotly
+requests
+beautifulsoup4
