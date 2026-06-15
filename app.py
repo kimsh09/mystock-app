@@ -25,6 +25,7 @@ def load_local_db(file_name, default_data):
 def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 # 내부 경고 강제 차단
 warnings.filterwarnings('ignore')
 
@@ -95,14 +96,11 @@ def get_macro_market_data():
             res["KOSPI"] = (close_k, chg_k)
     except:
         res["KOSPI"] = (0.0, 0.0)
-        # 📌 데이터 오류 방지용 안전장치 (이 위치가 정답입니다)
-    df.columns = [str(c).strip().capitalize() for c in df.columns]
-    if 'Volume' not in df.columns: df['Volume'] = 0
-    df.rename(columns={'Close': 'Close', 'Open': 'Open', 'High': 'High', 'Low': 'Low'}, inplace=True)
+        
     tickers = {"나스닥 100": "^NDX", "VIX (공포지수)": "^VIX", "원/달러 환율": "KRW=X"}
     for name, t in tickers.items():
         try:
-            df = yf.Ticker(t).history(period="1mo")
+            df = yf.Ticker(t).history(period="1mo").dropna(subset=['Close'])
             if not df.empty and len(df) >= 2:
                 close = float(df['Close'].iloc[-1])
                 prev = float(df['Close'].iloc[-2])
@@ -170,8 +168,14 @@ render_macro_board()
 
 # 메인 데이터 캐시
 @st.cache_data(ttl=60, show_spinner=False)
-# 🚀 [추가] 실시간 배당률 자동 스크래핑 엔진
-@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_yf_data(ticker, period="2y"):
+    try:
+        df = yf.Ticker(ticker).history(period=period)
+        return df
+    except:
+        return pd.DataFrame()
+    # 🚀 [추가] 실시간 배당률 자동 스크래핑 엔진
+
 # 🚀 [수정 1] 미국 ETF 배당금(달러)을 수익률로 착각하는 야후 파이낸스 버그 완벽 제어 (v5 엔진)
 @st.cache_data(ttl=60, show_spinner=False)
 def get_dividend_yield_v5(code, is_usa, ticker):
@@ -236,30 +240,7 @@ def get_dividend_yield_v5(code, is_usa, ticker):
             return 0.0
     except:
         return 0.0
-@st.cache_data(ttl=60, show_spinner=False)
-def fetch_yf_data(ticker, period="2y"):
-    # 에러가 나더라도 무조건 Close를 뱉어내도록 하는 안전 뼈대
-    safe_df = pd.DataFrame(columns=['Open', 'High', 'Low', 'Close', 'Volume'])
-    try:
-        df = yf.Ticker(ticker).history(period=period)
-        
-        if df.empty:
-            return safe_df
-        
-        # 1. 튜플(다중) 컬럼명 강제 풀기 (yfinance 최신버전 에러 완벽 차단)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0] for col in df.columns]
-            
-        # 2. 소문자나 공백이 섞여 있어도 무조건 표준(Close 등)으로 대문자 변환
-        df.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
-        
-        # 3. 만약 그래도 Close가 없다면 안전 뼈대 반환
-        if 'Close' not in df.columns:
-            return safe_df
-            
-        return df
-    except:
-        return safe_df
+    
 # 🚀 [추가 1] 기업 펀더멘탈 실시간 스크래핑 엔진 (고정 버그 해결)
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_real_fundamentals(code, is_usa, ticker):
@@ -295,6 +276,7 @@ def get_real_fundamentals(code, is_usa, ticker):
     if pbr_val <= 0 or pd.isna(pbr_val): pbr_val = 1.0
     if net_per <= 0 or pd.isna(net_per): net_per = 15.0
     return round(pbr_val, 2), round(net_per, 2), round(net_growth, 2)
+
 @st.cache_data(ttl=60, show_spinner=False)
 def get_cached_naver_supply(code):
     try:
@@ -585,7 +567,6 @@ else:
                 is_valid_input = True
                 # 자동 교정되었다는 알림 메시지를 화면 우측 하단에 띄움
                 st.toast(f"💡 AI 자동 교정: '{raw_search}' ➡️ '{best_match}'(으)로 인식했습니다.")
-
 if not is_valid_input:
     st.error(f"❌ '{st.session_state['current_stock']}' 주식 또는 ETF를 찾을 수 없습니다. 정확한 종목명이나 코드를 입력해주세요.")
     st.stop()
@@ -599,26 +580,9 @@ if pure_code:
     # try 예외처리 삭제 (오류 발생 시 화면 전체가 사라지는 것을 방지)
     with st.spinner(f"'{target_display_name}' 분석 데이터 동기화 중..."):
         
+        # 🚀 [수정 3] 고정값이 아닌 실시간 함수로 데이터 연동
         if is_usa:
-            df_raw = fetch_yf_data(yahoo_ticker, period="2y")
-            unit = "$"
-            latest_price = df_raw['Close'].iloc[-1] if not df_raw.empty else 0.0
-            foreigners, institution, retail = 0.0, 0.0, 0.0
-        else:
-            unit = "원"
-            # 🚀 네이버, 고영 완벽 처리: .KS 시도 후 실패 시 .KQ 즉시 크로스 체킹
-            df_raw = fetch_yf_data(pure_code + ".KS", period="2y")
-            if df_raw.empty or len(df_raw) < 10:
-                df_raw = fetch_yf_data(pure_code + ".KQ", period="2y")
-            
-            foreigners, institution, retail, latest_price, n_open, n_high, n_low, n_vol = get_cached_naver_supply(pure_code)
-            
-            if (latest_price == 0 or pd.isna(latest_price)) and not df_raw.empty: 
-                latest_price = float(df_raw['Close'].iloc[-1])
-
-            # 🚀 [수정 3] 고정값이 아닌 실시간 함수로 데이터 연동
-        if is_usa:
-            df_raw = fetch_yf_data(yahoo_ticker, period="2y")
+            df_raw = fetch_yf_data(yahoo_ticker, period="2y").dropna(subset=['Close'])
             unit = "$"
             latest_price = df_raw['Close'].iloc[-1] if not df_raw.empty else 0.0
             foreigners, institution, retail = 0.0, 0.0, 0.0
@@ -642,21 +606,10 @@ if pure_code:
             safe_price = latest_price if (latest_price > 0 and not pd.isna(latest_price)) else 10000.0
             mock_dates = [datetime.today() - timedelta(days=i) for i in range(20, -1, -1)]
             df_raw = pd.DataFrame({
-                'Close': [safe_price]*21,
-                'Open': [safe_price]*21,
-                'High': [safe_price]*21,
-                'Low': [safe_price]*21,
-                'Volume': [10000]*21
+                'Close': [safe_price]*21, 'Open': [safe_price]*21,
+                'High': [safe_price]*21, 'Low': [safe_price]*21, 'Volume': [10000]*21
             }, index=mock_dates)
-
-            # 🔥🔥🔥 [여기에 딱 이 3줄만 복사해서 끼워넣으십시오] 🔥🔥🔥
-            df_raw = df_raw.reset_index()
-            df_raw.rename(columns={'index': 'Date'}, inplace=True)
-            df_raw.rename(columns=lambda x: str(x).strip().capitalize(), inplace=True)
-            # 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-
-            unit = "달러" if is_usa else "원"
-            latest_price = float(df_raw.iloc[-1]['Close'])
+            latest_price = safe_price
 
         if latest_price > 0 and not is_usa:
             last_idx = df_raw.index[-1]
@@ -731,6 +684,7 @@ if pure_code:
         elif buy_timing_score >= 40: buy_status, buy_color = "⏳ 관망 (타점 조율/일부 대기)", "#1976D2"
         else: buy_status, buy_color = "⚠️ 매도 우위 (비중 축소 / 진입 금지)", "#E65100"
 
+        # 🚀 [수정 2] 수학적 기대 손익비(Risk-Reward) 마이너스 오류 보정 필터
         reward_width = max(target_profit_price - latest_price_tmp, 0.1)
         risk_width = max(latest_price_tmp - stop_loss_price, 0.1)
         risk_reward_ratio = round(reward_width / risk_width, 2)
@@ -943,8 +897,7 @@ if pure_code:
                 st.metric(label="⚖️ 1차 저항선 (스윙 익절가)", value=f"{r1:,.0f}{unit}", delta="반등 성공 시 이 가격에서 미련 없이 매도", delta_color="off")
         else:
             st.warning("데이터가 부족하여 타점을 계산할 수 없습니다.")
-            
-# 🚀 [신규 킬러 기능 3] 매물대(Volume Profile) 투시 레이더
+    # 🚀 [신규 킬러 기능 3] 매물대(Volume Profile) 투시 레이더
     with tab5:
         st.markdown("#### 🧱 악성 매물대 및 콘크리트 지지선 투시 레이더 (최근 6개월 기준)")
         
@@ -999,7 +952,8 @@ if pure_code:
             st.plotly_chart(fig_vp, use_container_width=True)
         else:
             st.error("데이터가 부족하여 매물대를 분석할 수 없습니다.")
-    # # 💼 나의 전술적 포트폴리오 관리자
+
+    # 💼 나의 전술적 포트폴리오 관리자
     with st.expander(f"💼 나의 전술적 포트폴리오 관리자 - '{target_display_name}'", expanded=True):
         
         # 🚀 [수정] 기초 자금 설정을 Form 밖으로 빼내어 실시간 연동되도록 독립시킴
