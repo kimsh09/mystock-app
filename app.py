@@ -588,22 +588,24 @@ else:
                 is_valid_input = True
                 st.toast(f"💡 AI 자동 교정: '{raw_search}' ➡️ '{best_match}'(으)로 인식했습니다.")
             else:
-                    # 💡 [최종 방어막] KRX 접속 차단 시, 네이버 금융 검색창 결과를 다이렉트로 긁어오는 무적 엔진
+                    # 💡 KRX 접속 차단에 상관없이, 네이버 금융 검색창에서 바로 종목을 찾아오는 최강 우회 엔진
                     try:
                         search_url = f"https://finance.naver.com/search/searchList.naver?query={raw_search}"
-                        headers = {'User-Agent': 'Mozilla/5.0'}
-                        search_res = requests.get(search_url, headers=headers, timeout=3)
+                        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0'}
+                        search_res = requests.get(search_url, headers=headers, timeout=5)
                         search_soup = BeautifulSoup(search_res.text, 'html.parser')
                         
-                        # 네이버 검색 결과의 첫 번째 종목 코드 추출
+                        # 검색 결과 첫 번째 항목의 코드 추출
                         a_tag = search_soup.select_one('td.tit a')
                         if a_tag and 'code=' in a_tag['href']:
                             pure_code = a_tag['href'].split('code=')[1]
                             target_display_name = a_tag.text
                             is_valid_input = True
-                            st.toast(f"🌐 네이버 금융 다이렉트 연동: '{target_display_name}' 완벽 스캔!")
+                            st.success(f"🌐 종목 발견: {target_display_name} ({pure_code})")
+                        else:
+                            st.error(f"❌ '{raw_search}' 종목을 찾을 수 없습니다. 정확한 명칭을 확인해주세요.")
                     except:
-                        pass
+                        st.error("⚠️ 실시간 검색 엔진 연결 오류 발생")
 if not is_valid_input:
     st.error(f"❌ '{st.session_state['current_stock']}' 주식 또는 ETF를 찾을 수 없습니다. 정확한 종목명이나 코드를 입력해주세요.")
     st.stop()
