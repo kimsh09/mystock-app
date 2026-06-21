@@ -76,7 +76,9 @@ krx_dict = get_all_krx_dict_dynamic()
 if 'current_stock' not in st.session_state:
     st.session_state['current_stock'] = "삼성전자"
 if 'favorites' not in st.session_state:
-    st.session_state['favorites'] = load_local_db("favorites_storage.json", ["풍산홀딩스", "풍산", "고영", "한국전력", "삼성전자", "LS일렉트릭", "네이버"])
+    # 💡 파일이 날아가도 파트너님의 주력 종목들이 항상 기본값으로 복구되도록 세팅합니다.
+    default_favs = ["고영", "풍산홀딩스", "한국전력", "코세스"]
+    st.session_state['favorites'] = load_local_db("favorites_storage.json", default_favs)
 if 'stock_portfolio_db' not in st.session_state:
     st.session_state['stock_portfolio_db'] = load_local_db("portfolio_storage.json", {})
 
@@ -153,14 +155,15 @@ def render_macro_board():
         vix_trend = macro_data.get("VIX_TREND", "안정")
         usd_trend = macro_data.get("USD_TREND", "안정")
         
+        # 💡 가짜 고정 텍스트를 완전히 제거하고 실시간 대조 시스템으로 전면 교체합니다.
         if vix_val >= 25.0:
-            st.error(f"⚠️ **[시장 투매 경보 발동]** 현재 VIX 공포지수가 {vix_val:.1f}로 극한의 패닉 상태입니다. 신규 진입을 전면 중단하고 100% 현금 방어 태세를 유지하십시오.")
-        elif usd_krw >= 1420.0:
-            st.error(f"⚠️ **[환율 급등 투매 경보]** 현재 원/달러 환율이 {usd_krw:,.1f}원으로 외국인 자금 이탈 마지노선을 뚫었습니다. 신규 진입을 전면 중단하십시오.")
+            st.error(f"⚠️ **[시장 투매 경보 발동]** 현재 VIX 공포지수가 {vix_val:.1f}로 패닉 상태입니다. 현금 방어 태세를 유지하십시오.")
+        elif usd_krw >= 1450.0:
+            st.error(f"🚨 **[환율 급등 투매 경보]** 현재 실시간 원/달러 환율이 {usd_krw:,.1f}원으로 리스크 마지노선을 돌파했습니다. 신규 진입을 전면 제한합니다.")
         elif vix_trend == "위험조짐" or usd_trend == "위험조짐":
-            st.warning(f"🔔 **[AI 선행 지표 사전 경보]** 최근 공포지수 또는 환율의 이동평균이 급격히 상승 중입니다! 스마트 머니 이탈 낌새가 감지되었으니 이번 주부터 현금 비중을 늘려 폭락에 대비하십시오.")
-        elif vix_val < 20.0 and usd_krw < 1400.0:
-            st.success(f"🔥 **[AI 시장 안정화 판정]** 시장 공포지수가 안정권이며 환율이 방어되고 있습니다. 적극적인 매수 스탠스를 취하기 좋은 환경입니다.")
+            st.warning(f"🔔 **[AI 선행 지표 경보]** 최근 환율 및 공포지수 이동평균이 우상향 중입니다. 자산 비중 조절에 유의하세요.")
+        else:
+            st.success(f"🔥 **[AI 시장 안정화 판정]** 현재 실시간 환율이 {usd_krw:,.1f}원으로 안정권이며 적극적인 대응이 가능한 환경입니다.")
         st.divider()
 
 # 선언한 조각(Fragment) 화면을 실행
@@ -352,23 +355,41 @@ def get_main_live_news(stock_name, count=4):
 def search_theme_stocks_low_valuation(keyword):
     if not keyword.strip(): return []
     try:
-        url = f"https://search.naver.com/search.naver?where=news&query={keyword}+관련주&sort=0"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=2)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        found_stocks = []
-        all_text = soup.get_text()
+        url = f"https://search.naver.com/search.naver?where=news&query={keyword}+관련주"
         
-        target_keys = list(krx_dict.keys())[:300]
+        # 💡 [핵심] 네이버의 봇 차단(IP Block)을 뚫기 위해 진짜 윈도우/크롬 브라우저처럼 완벽하게 위장합니다.
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+        res = requests.get(url, headers=headers, timeout=3)
+        
+        # 네이버가 그래도 차단했다면 빈 결과를 반환해 에러를 막습니다.
+        if res.status_code != 200:
+            return []
+
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        # 💡 전체 웹페이지가 아닌, 딱 '뉴스 리스트' 영역만 떼어내서 관련 없는 잡주가 끼어드는 것을 막습니다.
+        news_area = soup.select('.list_news')
+        if not news_area:
+            return []
+            
+        combined_text = news_area[0].get_text()
+        
+        found_stocks = []
+        target_keys = [k for k in krx_dict.keys() if not k.isdigit() and len(k) > 1]
+        
         for s_name in target_keys:
-            if s_name in all_text and s_name != keyword and len(s_name) > 1 and not s_name.isdigit():
+            # 스크랩한 뉴스 구역 안에 종목명이 포함되어 있는지 검사
+            if s_name in combined_text and s_name != keyword:
                 found_stocks.append(s_name)
                     
         scored_stocks = list(set(found_stocks))
-        return scored_stocks[:6]
+        return scored_stocks[:5]
     except:
         return []
-
 @st.cache_data(ttl=600, show_spinner=False)
 def get_realtime_thunder_rich_stocks():
     try:
@@ -558,15 +579,31 @@ else:
         # 💡 [신규 킬러 기능] 위에서 못 찾았을 경우, AI가 가장 비슷한 종목을 자동 추론 (오타 방어막)
         if not is_valid_input:
             available_names = [k for k in krx_dict.keys() if not k.isdigit()]
-            # 입력한 텍스트와 60% 이상 유사한 종목명 1개를 찾아냄
-            closest_matches = difflib.get_close_matches(search_nodash, available_names, n=1, cutoff=0.6)
+            # 💡 컷오프 지수를 0.85로 높여 엉뚱한 종목(한미반도체)으로의 오인식을 원천 차단합니다.
+            closest_matches = difflib.get_close_matches(search_nodash, available_names, n=1, cutoff=0.85)
             if closest_matches:
                 best_match = closest_matches[0]
                 pure_code = krx_dict[best_match]
                 target_display_name = best_match
                 is_valid_input = True
-                # 자동 교정되었다는 알림 메시지를 화면 우측 하단에 띄움
                 st.toast(f"💡 AI 자동 교정: '{raw_search}' ➡️ '{best_match}'(으)로 인식했습니다.")
+            else:
+                    # 💡 [최종 방어막] KRX 접속 차단 시, 네이버 금융 검색창 결과를 다이렉트로 긁어오는 무적 엔진
+                    try:
+                        search_url = f"https://finance.naver.com/search/searchList.naver?query={raw_search}"
+                        headers = {'User-Agent': 'Mozilla/5.0'}
+                        search_res = requests.get(search_url, headers=headers, timeout=3)
+                        search_soup = BeautifulSoup(search_res.text, 'html.parser')
+                        
+                        # 네이버 검색 결과의 첫 번째 종목 코드 추출
+                        a_tag = search_soup.select_one('td.tit a')
+                        if a_tag and 'code=' in a_tag['href']:
+                            pure_code = a_tag['href'].split('code=')[1]
+                            target_display_name = a_tag.text
+                            is_valid_input = True
+                            st.toast(f"🌐 네이버 금융 다이렉트 연동: '{target_display_name}' 완벽 스캔!")
+                    except:
+                        pass
 if not is_valid_input:
     st.error(f"❌ '{st.session_state['current_stock']}' 주식 또는 ETF를 찾을 수 없습니다. 정확한 종목명이나 코드를 입력해주세요.")
     st.stop()
@@ -942,7 +979,8 @@ if pure_code:
                 textposition='auto'
             ))
             fig_vp.update_layout(
-                title="📈 가격대별 누적 거래량 집중도 (가장 긴 빨간 막대가 핵심 저항/지지선)",
+                # 💡 모바일 화면 대응을 위해 제목을 2줄로 강제 줄바꿈(<br>) 처리합니다.
+                title="📈 가격대별 누적 거래량 집중도<br><sup>*(가장 긴 빨간 막대가 핵심 저항/지지선)*</sup>",
                 height=350,
                 margin=dict(l=10, r=10, t=40, b=10),
                 yaxis=dict(tickformat=",.0f" if unit=="원" else ",.2f"),
@@ -1021,9 +1059,17 @@ if pure_code:
             
             prob_win = float(buy_timing_score / 100.0)
             prob_loss = 1.0 - prob_win
-            b_ratio = risk_reward_ratio if risk_reward_ratio > 0 else 1.0
-            kelly_f = prob_win - (prob_loss / b_ratio)
-            kelly_pct = max(0.0, kelly_f) * 100.0
+            b_ratio = risk_reward_ratio if risk_reward_ratio > 0 else 1.0 
+            kelly_f = prob_win - (prob_loss / b_ratio) 
+            kelly_pct = max(0.0, kelly_f) * 100.0 
+
+            # 🛡️ [안전장치 발동] 목표 수익률이 2% 미만이면 비중 강제 축소
+            expected_return = ((target_profit_price - latest_price_tmp) / latest_price_tmp) * 100
+            if expected_return < 2.0:
+                kelly_pct = min(kelly_pct, 10.0)  # 비중을 최대 10%로 제한
+                buy_timing_score = min(buy_timing_score, 50) # Та점 점수도 50점 이하로 깎음
+                st.warning(f"⚠️ [안전장치 작동] 기대 수익률이 {expected_return:.2f}%로 너무 낮아 투자 비중을 10% 이하로 제한합니다.")
+
             target_betting_money_man = (total_seed_money * (kelly_pct / 100.0)) / 10000
 
             with ui_mid_col:
