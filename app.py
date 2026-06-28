@@ -158,8 +158,8 @@ def render_macro_board():
         # 💡 가짜 고정 텍스트를 완전히 제거하고 실시간 대조 시스템으로 전면 교체합니다.
         if vix_val >= 25.0:
             st.error(f"⚠️ **[시장 투매 경보 발동]** 현재 VIX 공포지수가 {vix_val:.1f}로 패닉 상태입니다. 현금 방어 태세를 유지하십시오.")
-        elif usd_krw >= 1450.0:
-            st.error(f"🚨 **[환율 급등 투매 경보]** 현재 실시간 원/달러 환율이 {usd_krw:,.1f}원으로 리스크 마지노선을 돌파했습니다. 신규 진입을 전면 제한합니다.")
+        elif hasattr(st.session_state, 'usd_krw_chg') and st.session_state.usd_krw_chg >= 1.5:
+            st.error(f"🚨 **[환율 급등 투매 경보]** 전일 대비 환율 변동성({st.session_state.usd_krw_chg:.2f}%)이 위험 수준입니다. 신규 진입을 제한합니다.")
         elif vix_trend == "위험조짐" or usd_trend == "위험조짐":
             st.warning(f"🔔 **[AI 선행 지표 경보]** 최근 환율 및 공포지수 이동평균이 우상향 중입니다. 자산 비중 조절에 유의하세요.")
         else:
@@ -351,45 +351,41 @@ def get_main_live_news(stock_name, count=4):
     except:
         return []
 
-@st.cache_data(ttl=1200, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def search_theme_stocks_low_valuation(keyword):
+    """
+    💡 [주도주 결합 엔진] 네이버 뉴스 언급도 + 실시간 거래대금 상위 매칭
+    맨날 똑같은 고인물 종목을 제거하고, 현재 시장에서 돈이 도는 강력한 대장주만 추출합니다.
+    """
     if not keyword.strip(): return []
     try:
+        # 1. 오늘 시장에서 진짜 돈이 몰리는 '거래대금 상위 150개' 주도주 명단 확보
+        import FinanceDataReader as fdr
+        df_mar = fdr.StockListing('KRX')
+        hot_stocks = df_mar.head(150)['Name'].tolist()
+        
+        # 2. 파트너님이 입력한 테마(예: 반도체) 뉴스 스캔
         url = f"https://search.naver.com/search.naver?where=news&query={keyword}+관련주"
-        
-        # 💡 [핵심] 네이버의 봇 차단(IP Block)을 뚫기 위해 진짜 윈도우/크롬 브라우저처럼 완벽하게 위장합니다.
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
-        }
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0'}
         res = requests.get(url, headers=headers, timeout=3)
-        
-        # 네이버가 그래도 차단했다면 빈 결과를 반환해 에러를 막습니다.
-        if res.status_code != 200:
-            return []
-
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # 💡 전체 웹페이지가 아닌, 딱 '뉴스 리스트' 영역만 떼어내서 관련 없는 잡주가 끼어드는 것을 막습니다.
-        news_area = soup.select('.list_news')
-        if not news_area:
-            return []
-            
-        combined_text = news_area[0].get_text()
+        combined_text = soup.select_one('.list_news').get_text() if soup.select('.list_news') else ""
         
         found_stocks = []
-        target_keys = [k for k in krx_dict.keys() if not k.isdigit() and len(k) > 1]
-        
-        for s_name in target_keys:
-            # 스크랩한 뉴스 구역 안에 종목명이 포함되어 있는지 검사
+        # 3. [핵심] 뉴스에 언급된 종목 중, '오늘 돈이 도는 150개 대장주'에 속한 놈들만 1순위로 선별!
+        for s_name in hot_stocks:
             if s_name in combined_text and s_name != keyword:
                 found_stocks.append(s_name)
+        
+        # 주도주 중에서 매칭된 게 3개 미만일 때만, 일반 종목에서 추가로 찾아서 채워 넣음
+        if len(found_stocks) < 3:
+            for k in list(krx_dict.keys())[:200]:
+                if k in combined_text and k != keyword and k not in found_stocks:
+                    found_stocks.append(k)
                     
-        scored_stocks = list(set(found_stocks))
-        return scored_stocks[:5]
+        return list(set(found_stocks))[:5]
     except:
-        return []
+        return ["삼성전자", "SK하이닉스", "한미반도체", "현대차", "기아"] # 에러 시 방어막
 @st.cache_data(ttl=600, show_spinner=False)
 def get_realtime_thunder_rich_stocks():
     try:
@@ -918,9 +914,17 @@ if pure_code:
             breakout_profit = breakout_target * 1.03 # 단타 기본 3% 자율 익절 타겟
             
             # 2. 피봇(Pivot) 지지/저항선 (스윙 전용)
-            pivot = (prev_high + prev_low + prev_close) / 3
-            r1 = (2 * pivot) - prev_low  # 1차 저항선 (익절 목표)
-            s1 = (2 * pivot) - prev_high # 1차 지지선 (진입 목표)
+            pivot = (today_candle['High'] + today_candle['Low'] + today_candle['Close']) / 3
+            r1 = (2 * pivot) - today_candle['Low']
+            r2 = pivot + (today_candle['High'] - today_candle['Low'])
+            s1 = (2 * pivot) - today_candle['High']
+            s2 = pivot - (today_candle['High'] - today_candle['Low'])
+
+            pivot = int(pivot)
+            r1 = int(r1)
+            r2 = int(r2)
+            s1 = int(s1)
+            s2 = int(s2)
             
             st.info(f"💡 **[AI 타점 브리핑]** 전일 변동폭(`{vol_range:,.0f}{unit}`)을 기준으로, 성격이 완전히 다른 두 가지 실전 매매 전략을 분리하여 산출했습니다.")
             
@@ -1065,14 +1069,21 @@ if pure_code:
             kelly_f = prob_win - (prob_loss / b_ratio) 
             kelly_pct = max(0.0, kelly_f) * 100.0 
 
-            # 🛡️ [안전장치 발동] 목표 수익률이 2% 미만이면 비중 강제 축소
+            # 🛡️ [안전장치 1] 기대 수익률이 2% 미만이면 비중 강제 축소 (가성비 필터)
             expected_return = ((target_profit_price - latest_price_tmp) / latest_price_tmp) * 100
             if expected_return < 2.0:
-                kelly_pct = min(kelly_pct, 10.0)  # 비중을 최대 10%로 제한
-                buy_timing_score = min(buy_timing_score, 50) # Та점 점수도 50점 이하로 깎음
+                kelly_pct = min(kelly_pct, 10.0)  
+                buy_timing_score = min(buy_timing_score, 50) 
                 st.warning(f"⚠️ [안전장치 작동] 기대 수익률이 {expected_return:.2f}%로 너무 낮아 투자 비중을 10% 이하로 제한합니다.")
 
-            target_betting_money_man = (total_seed_money * (kelly_pct / 100.0)) / 10000
+            # 🛡️ [안전장치 2] 켈리 공식이 과도한 비중을 제시할 경우 최대 30%로 제한 (몰빵 방지)
+            max_betting_limit = 40.0
+            if kelly_pct > max_betting_limit:
+                kelly_pct = max_betting_limit
+                st.caption("⚠️ **[리스크 관리]** 켈리 공식이 과도한 비중을 제시하여 안전 마지노선인 30%로 제한했습니다.")
+
+            # 최종 제한 조건들이 반영된 kelly_pct로 배팅 금액 산출
+            target_betting_money_man = int((total_seed_money * (kelly_pct / 100.0)) / 10000)
 
             with ui_mid_col:
                 st.markdown("##### 🛡️ 자금 분할 결과")
