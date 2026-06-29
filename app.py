@@ -448,6 +448,7 @@ def search_theme_stocks_low_valuation(keyword):
     except Exception as e:
         # 시스템 에러 발생 시 최후의 방어선
         return ["삼성전자", "SK하이닉스", "HD현대일렉트릭", "알테오젠", "제주반도체"]
+        
 @st.cache_data(ttl=600, show_spinner=False)
 def get_realtime_thunder_rich_stocks():
     try:
