@@ -978,6 +978,7 @@ if pure_code:
             
             # 2. 피봇(Pivot) 지지/저항선 (스윙 전용)
             yesterday_candle = df.iloc[-2]
+            
             pivot = (yesterday_candle['High'] + yesterday_candle['Low'] + yesterday_candle['Close']) / 3
             r1 = (2 * pivot) - yesterday_candle['Low']
             r2 = pivot + (yesterday_candle['High'] - yesterday_candle['Low'])
