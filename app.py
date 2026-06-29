@@ -14,27 +14,8 @@ from datetime import datetime, timedelta
 import json
 import os
 import math
-import json
-import os
 
-# 💡 [로컬 영구 저장소 엔진] 앱이 새로고침되어도 1차 매수 기록을 기억합니다.
-def load_buy_records():
-    if os.path.exists("my_portfolio.json"):
-        try:
-            with open("my_portfolio.json", "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return {} # 파일이 깨졌을 경우 빈 데이터 반환
-    return {} # 파일이 없으면 빈 데이터 반환
-
-def save_buy_records(data):
-    with open("my_portfolio.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-# 스트림릿 세션에 저장소 연동 (앱 실행 시 최초 1회만 불러오기)
-if 'buy_records' not in st.session_state:
-    st.session_state.buy_records = load_buy_records()
-
+    
 # 파일 기반 영구 저장용 헬퍼 함수
 def load_local_db(file_name, default_data):
     if os.path.exists(file_name):
@@ -45,7 +26,9 @@ def load_local_db(file_name, default_data):
 def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-
+if 'stock_portfolio_db' not in st.session_state:
+    st.session_state['stock_portfolio_db'] = load_local_db("portfolio_storage.json", {})
+    
 # 내부 경고 강제 차단
 warnings.filterwarnings('ignore')
 
