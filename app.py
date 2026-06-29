@@ -905,7 +905,7 @@ if pure_code:
                 # 기본값은 현재 평단가보다 3% 낮게 자동 세팅
                 target_avg_price = st.number_input("희망하는 최종 평단가", value=float(chart_avg_price * 0.97), step=100.0 if unit=="원" else 1.0)
             
-with sim_col2:
+    with sim_col2:
     st.markdown("**🤖 AI 역산 결과 리포트**")
         
     # 1. 변수 선언 (여기서부터는 윗줄인 with sim_col2: 보다 딱 한 칸(Tab) 안쪽으로 예쁘게 들어갑니다)
