@@ -904,32 +904,27 @@ if pure_code:
                 st.markdown("**🎯 내가 원하는 목표 탈출 평단가 입력**")
                 # 기본값은 현재 평단가보다 3% 낮게 자동 세팅
                 target_avg_price = st.number_input("희망하는 최종 평단가", value=float(chart_avg_price * 0.97), step=100.0 if unit=="원" else 1.0)
-            
-    with sim_col2:
-        st.markdown("**🤖 AI 역산 결과 리포트**")
-            
-        # 1. 변수 선언 (여기서부터는 윗줄인 with sim_col2: 보다 딱 한 칸(Tab) 안쪽으로 예쁘게 들어갑니다)
-        latest_price_tmp = float(target_display_price) if 'target_display_price' in locals() else 0.0
-        current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
-        
-        # 2. 에러 원천 차단 3대장 (0으로 나누기, 엉뚱한 가격 입력 방어)
-        if target_avg_price <= latest_price_tmp:
-            st.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다.")
-        elif target_avg_price >= current_avg_price:
-            st.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
-        elif target_avg_price == latest_price_tmp:
-            st.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 대기하세요.")
-                
-        # 3. 위의 모든 방어막을 통과한 '정상적인 물타기' 역산
-        else:
-            req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
-            if req_qty > 0:
-                st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
-                st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
-            else:
-                st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
-        else:
-            st.warning("⚠️ 역산 엔진을 가동하려면 하단 [포트폴리오 관리자]에 1차 매수 수량을 먼저 입력하고 저장하십시오.")
+
+        with sim_col2:
+            st.markdown("**🤖 AI 역산 결과 리포트**")
+latest_price_tmp = float(target_display_price) if 'target_display_price' in locals() else 0.0
+current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
+
+if target_avg_price <= latest_price_tmp:
+    st.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다.")
+elif target_avg_price >= current_avg_price:
+    st.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
+elif target_avg_price == latest_price_tmp:
+    st.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 대기하세요.")
+else:
+    req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
+    if req_qty > 0:
+        st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
+        st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
+    else:
+        st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
+else:
+    st.warning("⚠️ 역산 엔진을 가동하려면 하단 [포트폴리오 관리자]에 1차 매수 수량을 먼저 입력하고 저장하십시오.")
 
     # 🚀 [신규 킬러 기능 1] 과거 2개년 AI 전략 승률 검증기
     with tab3:
