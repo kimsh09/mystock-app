@@ -905,12 +905,11 @@ if pure_code:
                 # 기본값은 현재 평단가보다 3% 낮게 자동 세팅
                 target_avg_price = st.number_input("희망하는 최종 평단가", value=float(chart_avg_price * 0.97), step=100.0 if unit=="원" else 1.0)
 
-       with sim_col2:
+sim_col1, sim_col2 = st.columns(2)
+
+with sim_col2:
     st.markdown("**🤖 AI 역산 결과 리포트**")
     import math
-
-    # 🚨 908번 줄 에러의 주범이었던 '외부 변수'들을 100% 삭제했습니다.
-    # 대신 화면에 직접 숫자를 입력해서 바로 계산기가 돌아가도록 '완전 독립형'으로 만들었습니다.
     
     _qty = st.number_input("📊 내 보유 수량 (주)", value=10.0, step=1.0)
     _cost = st.number_input("💰 총 매수 금액 (원)", value=401500.0, step=1000.0)
