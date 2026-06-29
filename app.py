@@ -906,21 +906,43 @@ if pure_code:
                 target_avg_price = st.number_input("희망하는 최종 평단가", value=float(chart_avg_price * 0.97), step=100.0 if unit=="원" else 1.0)
 
         with sim_col2:
-            st.markdown("**🤖 AI 역산 결과 리포트**")
-latest_price_tmp = float(target_display_price) if 'target_display_price' in locals() else 0.0
-current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
+    st.markdown("**🤖 AI 역산 결과 리포트**")
+    
+    # 1. 내부 안전 임포트 (NameError 완전히 방지)
+    import math
 
-if target_avg_price <= latest_price_tmp:
-    st.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다.")
-elif target_avg_price >= current_avg_price:
-    st.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
-elif target_avg_price == latest_price_tmp:
-    st.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 대기하세요.")
-else:
-    req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
-    if req_qty > 0:
-        st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
-        st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
+    # 2. 현재 내 보유 평단가 계산
+    current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0.0
+
+    # 3. 예외 처리 및 정밀 물타기/불타기 역산 로직
+    if target_avg_price == current_avg_price:
+        st.info("💡 목표 평단가가 현재 평단가와 같습니다. 추가 매수가 필요 없습니다.")
+
+    # [케이스 A] 물타기: 평단가를 낮추고 싶을 때 (예: 40,150원 -> 32,000원)
+    elif target_avg_price < current_avg_price:
+        if latest_price_tmp >= target_avg_price:
+            st.error(f"⚠️ 현재 주가({latest_price_tmp:,.0f}원)가 목표 평단가({target_avg_price:,.0f}원)보다 높거나 같습니다. 이 가격대에서는 매수해도 평단가를 더 낮출 수 없습니다. 주가가 더 내려가야 역산이 가능합니다.")
+        else:
+            # 정밀 분할매수 공식 (0 나누기 버그 차단)
+            req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
+            required_shares = math.ceil(req_qty)
+            additional_fund = required_shares * latest_price_tmp
+            
+            st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{required_shares:,} 주")
+            st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int(additional_fund/10000):,} 만원")
+
+    # [케이스 B] 불타기: 평단가를 높이고 싶을 때
+    elif target_avg_price > current_avg_price:
+        if latest_price_tmp <= target_avg_price:
+            st.error(f"⚠️ 현재 주가({latest_price_tmp:,.0f}원)가 목표 평단가({target_avg_price:,.0f}원)보다 낮거나 같습니다. 이 가격대에서는 매수해도 평단가를 더 높일 수 없습니다. 주가가 더 올라가야 역산이 가능합니다.")
+        else:
+            # 정밀 분할매수 공식
+            req_qty = (tmp_qty_sum * target_avg_price - tmp_cost_sum) / (latest_price_tmp - target_avg_price)
+            required_shares = math.ceil(req_qty)
+            additional_fund = required_shares * latest_price_tmp
+            
+            st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{required_shares:,} 주")
+            st.metric(label="💰 불타기에 필요한 추가 시드 자금", value=f"{int(additional_fund/10000):,} 만원")
     else:
         st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
 else:
