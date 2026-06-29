@@ -909,46 +909,46 @@ if pure_code:
     st.markdown("**🤖 AI 역산 결과 리포트**")
     import math
 
-    # 🚨 1. [완벽 방어] 밖에서 변수가 지워졌거나 못 가져와도 절대 에러 안 나게 강제 세팅
-    try:
-        _latest = float(latest_price_tmp)
-    except NameError:
-        try:
-            _latest = float(target_display_price)
-        except NameError:
-            _latest = 0.0
-
-    try: _target = float(target_avg_price)
-    except NameError: _target = 0.0
+    # 🚨 [바이패스 밸브 탑재] 데이터 배관이 끊어져 변수가 안 넘어오면, 에러 대신 수동 입력창(UI)을 띄웁니다!
     
-    try: _cost = float(tmp_cost_sum)
-    except NameError: _cost = 0.0
-    
-    try: _qty = float(tmp_qty_sum)
-    except NameError: _qty = 0.0
+    # 1. 내 보유 수량
+    _qty = tmp_qty_sum if 'tmp_qty_sum' in locals() or 'tmp_qty_sum' in globals() else 0.0
+    if _qty == 0.0:
+        _qty = st.number_input("📊 [수동입력] 내 보유 수량 (주)", value=10.0, step=1.0)
+        
+    # 2. 내 총 매수 금액
+    _cost = tmp_cost_sum if 'tmp_cost_sum' in locals() or 'tmp_cost_sum' in globals() else 0.0
+    if _cost == 0.0:
+        _cost = st.number_input("💰 [수동입력] 총 매수 금액 (원)", value=401500.0, step=1000.0)
+        
+    # 3. 목표 평단가
+    _target = target_avg_price if 'target_avg_price' in locals() or 'target_avg_price' in globals() else 0.0
+    if _target == 0.0:
+        _target = st.number_input("🎯 [수동입력] 목표 평단가 (원)", value=32000.0, step=100.0)
+        
+    # 4. 현재 주가 (추가 매수 타점)
+    _latest = latest_price_tmp if 'latest_price_tmp' in locals() or 'latest_price_tmp' in globals() else 0.0
+    if _latest == 0.0:
+        _latest = st.number_input("📉 [수동입력] 현재 주가 (원)", value=28000.0, step=100.0)
 
-    # 2. 현재 내 보유 평단가 계산
+    # ----------------------------------------------------
+    # ⚙️ 100% 가동되는 정밀 역산 엔진
     current_avg_price = _cost / _qty if _qty > 0 else 0.0
 
-    # 3. 예외 처리 및 정밀 역산 로직
-    if _target == 0.0 or _latest == 0.0:
-        st.warning("⚠️ 주가 또는 목표 평단가 데이터가 입력되지 않았습니다.")
-    elif _target == current_avg_price:
-        st.info("💡 목표 평단가가 현재 평단가와 같습니다. 추가 매수가 필요 없습니다.")
-
-    # [케이스 A] 물타기: 평단가를 낮추고 싶을 때
+    if _target == current_avg_price:
+        st.info("💡 목표 평단가가 현재 평단가와 같습니다.")
+        
     elif _target < current_avg_price:
         if _latest >= _target:
-            st.error(f"⚠️ 현재 주가({_latest:,.0f}원)가 목표 평단가({_target:,.0f}원)보다 높거나 같습니다. 주가가 더 내려가야 역산이 가능합니다.")
+            st.error(f"⚠️ 현재 주가({_latest:,.0f}원)가 목표 평단가({_target:,.0f}원)보다 높거나 같습니다. 주가가 더 내려가야 합니다.")
         else:
             req_qty = (_cost - _qty * _target) / (_target - _latest)
             st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
             st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * _latest)/10000):,} 만원")
-
-    # [케이스 B] 불타기: 평단가를 높이고 싶을 때
+            
     elif _target > current_avg_price:
         if _latest <= _target:
-            st.error(f"⚠️ 현재 주가({_latest:,.0f}원)가 목표 평단가({_target:,.0f}원)보다 낮거나 같습니다. 주가가 더 올라가야 역산이 가능합니다.")
+            st.error(f"⚠️ 현재 주가({_latest:,.0f}원)가 목표 평단가({_target:,.0f}원)보다 낮거나 같습니다. 주가가 더 올라가야 합니다.")
         else:
             req_qty = (_qty * _target - _cost) / (_latest - _target)
             st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
