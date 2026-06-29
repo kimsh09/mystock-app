@@ -906,28 +906,28 @@ if pure_code:
                 target_avg_price = st.number_input("희망하는 최종 평단가", value=float(chart_avg_price * 0.97), step=100.0 if unit=="원" else 1.0)
             
     with sim_col2:
-    st.markdown("**🤖 AI 역산 결과 리포트**")
-    # 현재 주가로 이 목표 평단가를 맞추려면 몇 주를 사야 하는지 공식 역산
+        st.markdown("**🤖 AI 역산 결과 리포트**")
+        # 현재 주가로 이 목표 평단가를 맞추려면 몇 주를 사야 하는지 공식 역산
     
-    current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
+        current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
 
-    # 조건: 목표 평단가가 내 기존 평단가보다는 낮고, 현재 살 수 있는 주가보다는 높아야 물타기가 성립됩니다.
-    if latest_price_tmp < target_avg_price < current_avg_price:
-        # 정밀 분할매수 역산 공식
-        req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
+        # 조건: 목표 평단가가 내 기존 평단가보다는 낮고, 현재 살 수 있는 주가보다는 높아야 물타기가 성립됩니다.
+        if latest_price_tmp < target_avg_price < current_avg_price:
+            # 정밀 분할매수 역산 공식
+            req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
         
-        if req_qty > 0:
-            st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,f} 주")
-            st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{(math.ceil(req_qty) * latest_price_tmp)/10000:,.0f} 만원")
-        else:
-            st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
+            if req_qty > 0:
+                st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,f} 주")
+                st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{(math.ceil(req_qty) * latest_price_tmp)/10000:,.0f} 만원")
+            else:
+                st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
             
-    else:
-        # 목표 평단가가 성립하지 않는 예외 케이스 처리
-        if target_avg_price <= latest_price_tmp:
-            st.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다. (현재 주가보다 낮게 맞추려면 주가가 더 내려가야 합니다)")
-        elif target_avg_price >= current_avg_price:
-            st.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
+        else:
+            # 목표 평단가가 성립하지 않는 예외 케이스 처리
+            if target_avg_price <= latest_price_tmp:
+                st.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다. (현재 주가보다 낮게 맞추려면 주가가 더 내려가야 합니다)")
+            elif target_avg_price >= current_avg_price:
+                st.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
         else:
             st.warning("⚠️ 역산 엔진을 가동하려면 하단 [포트폴리오 관리자]에 1차 매수 수량을 먼저 입력하고 저장하십시오.")
 
