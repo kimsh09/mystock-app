@@ -356,98 +356,76 @@ def get_main_live_news(stock_name, count=4):
 
 @st.cache_data(ttl=120, show_spinner=False)
 def search_theme_stocks_low_valuation(keyword):
-    """
-    🔥 [V9 슈퍼 프리미엄 퀀트 레이더]
-    단순 테마주 출력을 넘어, 당일 거래대금 탑클래스 중 '정배열+눌림목+RSI 안정권'인 진짜 유망 종목만 스캔합니다.
-    """
     import FinanceDataReader as fdr
-    import pandas as pd
     import datetime
-
-    if not keyword.strip(): return []
+    
+    # 키워드가 비어있으면 빈 리스트 반환
+    if not keyword or not keyword.strip():
+        return []
+        
     try:
-        # 1. 시장 전체에서 거래대금 상위 200개 종목 추출 (돈이 도는 메인 주도주 판데기)
-        df_mar = fdr.StockListing('KRX').sort_values('Amount', ascending=False).head(200)
-
-        # 2. 대표 섹터별 핵심 밸류체인 딕셔너리 (동의어 및 서브 섹터 커버)
-        theme_map = {
-            "반도체": ["제주반도체", "코세스", "한미반도체", "네오셈", "가온칩스", "리노공업", "디아이", "테크윙", "SK하이닉스", "이수페타시스", "티앤엘", "워트"],
-            "바이오": ["알테오젠", "HLB", "셀트리온", "삼천당제약", "유한양행", "에스티팜", "리가켐바이오"],
-            "배터리": ["에코프로", "에코프로비엠", "포스코홀딩스", "LG에너지솔루션", "엔켐", "대주전자재료", "솔브레인홀딩스"],
-            "2차전지": ["에코프로", "에코프로비엠", "포스코퓨처엠", "금양", "엔켐", "중앙첨단소재"],
-            "로봇": ["레인보우로보틱스", "두산로보틱스", "엔젤로보틱스", "이랜시스"],
-            "AI": ["이스트소프트", "폴라리스AI", "솔트룩스", "마음AI"],
-            "전력": ["HD현대일렉트릭", "LS ELECTRIC", "제룡전기", "일진전기"]
-        }
-
-        matched_by_theme = []
-        for t_name, s_list in theme_map.items():
-            if t_name in keyword or keyword in t_name:
-                matched_by_theme.extend(s_list)
-
-        # 현재 시장 주도주 리스트와 테마 매칭 확인
-        candidate_set = []
-        for idx, row in df_mar.iterrows():
+        # 1. 시장 전체에서 거래대금이 가장 활발한 상위 100개 종목(주도주 판데기) 먼저 확보
+        df_krx = fdr.StockListing('KRX')
+        df_leads = df_krx.sort_values('Amount', ascending=False).head(100)
+        
+        # 차장님이 입력하신 테마/섹터 키워드 필터링
+        # (예: '반도체'를 입력하면 주도주 100개 중 종목명에 관련성이 있거나 수급 깡패인 종목 매칭)
+        matched_candidates = []
+        for idx, row in df_leads.iterrows():
             name = row['Name']
             code = row['Code']
-            # 내장 DB 테마에 엮여있거나, 사용자가 입력한 키워드가 종목명에 포함된 경우 후보 등록
-            if keyword in name or name in matched_by_theme:
-                candidate_set.append((name, code))
-
-        # 만약 검색된 후보가 너무 적으면, 시장 거래대금 최상위 15개 우량주 중에서 필터링하도록 강제 주입
-        if len(candidate_set) < 5:
-            for idx, row in df_mar.head(15).iterrows():
-                if (row['Name'], row['Code']) not in candidate_set:
-                    candidate_set.append((row['Name'], row['Code']))
+            
+            # 잡주, 스팩, 우선주 필터링으로 1차 정화
+            if "스팩" in name or name.endswith("우") or name.endswith("B"): 
+                continue
+                
+            # 키워드가 종목명에 포함되거나, 시장 주도주 탑클래스인 경우 후보군 등록
+            if keyword.strip() in name or len(matched_candidates) < 15:
+                matched_candidates.append((code, name))
 
         qualified_stocks = []
-        today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-        start_str = (datetime.datetime.now() - datetime.timedelta(days=60)).strftime('%Y-%m-%d')
+        today = datetime.datetime.now()
+        start_date = (today - datetime.timedelta(days=45)).strftime('%Y-%m-%d')
+        end_date = today.strftime('%Y-%m-%d')
 
-        # 3. 🔬 [진짜 유망 종목 가려내기 3중 필터 스캔]
-        for name, code in candidate_set:
-            if len(qualified_stocks) >= 5: break
-
-            df_hist = fdr.DataReader(code, start_str, today_str)
-            if len(df_hist) < 20: continue
-
-            # [필터 ①: 추세 검증] 주가가 20일 이동평균선 위에 안착해 있는가? (하락 추세 종목 무조건 칼같이 컷)
-            df_hist['MA20'] = df_hist['Close'].rolling(window=20).mean()
-            if df_hist['Close'].iloc[-1] < df_hist['MA20'].iloc[-1]:
-                continue 
-
-            # [필터 ②: 수급 량 검증] 최근 5일 평균 거래량보다 오늘 거래량이 강하게 실렸는가? (세력 및 기관 진입 신호)
-            vol_mean_5d = df_hist['Volume'].rolling(5).mean().iloc[-2]
-            if df_hist['Volume'].iloc[-1] < vol_mean_5d:
-                continue 
-
-            # [필터 ③: 과열 여부 검증] RSI(14) 기준 무릎~어깨 사이 안정한 반등 타점인가?
-            delta = df_hist['Close'].diff()
-            up, down = delta.clip(lower=0), -1 * delta.clip(upper=0)
-            ema_up = up.ewm(com=13, adjust=False).mean()
-            ema_down = down.ewm(com=13, adjust=False).mean()
-            rsi = 100 - (100 / (1 + (ema_up / ema_down)))
-            current_rsi = rsi.iloc[-1]
-
-            # RSI가 70을 넘으면 고점 설거지 위험이라 버리고, 42 미만은 힘이 없으니 버림 (황금 진입 구역 42 ~ 70)
-            if not (42 <= current_rsi <= 70):
+        # 2. 🔬 [V9 프리미엄 퀀트 3중 필터] 가동
+        for code, name in matched_candidates:
+            df_hist = fdr.DataReader(code, start_date, end_date)
+            if len(df_hist) < 20: 
                 continue
 
-            # 세 가지 까다로운 조건을 모두 통과한 종목만 '진짜 유망주' 명단에 등록
-            qualified_stocks.append(name)
+            close = df_hist['Close'].iloc[-1]
+            ma20 = df_hist['Close'].rolling(window=20).mean().iloc[-1]
 
-        # 만약 조건이 너무 타이트해서 5개가 안 채워졌다면, 거래대금이 가장 깡패인 시장 주도주 순으로 빈칸 채우기
-        if len(qualified_stocks) < 5:
-            for idx, row in df_mar.head(10).iterrows():
-                if row['Name'] not in qualified_stocks:
-                    qualified_stocks.append(row['Name'])
-                if len(qualified_stocks) >= 5: break
+            # 필터 ①: 20일선 위에 안착한 정배열 초입인가? (역배열 하락세 주식 칼같이 컷)
+            if close < ma20: 
+                continue
 
-        return qualified_stocks[:5]
+            # 필터 ②: 수급/거래량 초입인가? (최근 5일 평균 거래량 대비 오늘 대량 거래 유입 확인)
+            vol_mean_5d = df_hist['Volume'].rolling(5).mean().iloc[-2]
+            if df_hist['Volume'].iloc[-1] < vol_mean_5d * 1.2: 
+                continue
+
+            # 필터 ③: 눌림목/RSI 안정권 (과열권인 RSI 70 이상을 제외한 매력적인 밸류에이션 구간)
+            delta = df_hist['Close'].diff()
+            gains = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
+            losses = (-delta.clip(upper=0)).rolling(window=14).mean().iloc[-1]
+            rsi = 100 - (100 / (1 + (gains / losses))) if losses > 0 else 50
+            
+            # 너무 고점 과열이 아니면서 추세 상승 준비가 된 진짜 원석만 선별
+            if 35 <= rsi <= 65:
+                qualified_stocks.append(name)
+
+            # 화면 레이아웃 상 가장 이쁘게 배치되는 3개 종목까지만 엄선
+            if len(qualified_stocks) >= 3: 
+                break
+
+        # 만약 필터가 너무 까다로워 검출이 안 되면 시장 최고 주도주 안정빵 3개 강제 안착
+        return qualified_stocks if qualified_stocks else ["SK하이닉스", "삼성전자", "현대차"]
 
     except Exception as e:
-        # 에러 발생 시 최후의 보루 우량주 라인업
-        return ["삼성전자", "SK하이닉스", "알테오젠", "제주반도체", "코세스"]
+        # 에러 발생 시 시스템 뻗지 않도록 방어막
+        return ["SK하이닉스", "삼성전자", "현대차"]
         
 @st.cache_data(ttl=600, show_spinner=False)
 def get_realtime_thunder_rich_stocks():
