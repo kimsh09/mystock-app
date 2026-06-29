@@ -926,7 +926,7 @@ else:
     if req_qty > 0:
         sim_col2.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
         sim_col2.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
-    else:
+else:
         sim_col2.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
 else:
 st.warning("⚠️ 역산 엔진을 가동하려면 하단 [포트폴리오 관리자]에 1차 매수 수량을 먼저 입력하고 저장하십시오.")
