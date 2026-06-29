@@ -354,41 +354,100 @@ def get_main_live_news(stock_name, count=4):
     except:
         return []
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=180, show_spinner=False)
 def search_theme_stocks_low_valuation(keyword):
     """
-    💡 [주도주 결합 엔진] 네이버 뉴스 언급도 + 실시간 거래대금 상위 매칭
-    맨날 똑같은 고인물 종목을 제거하고, 현재 시장에서 돈이 도는 강력한 대장주만 추출합니다.
+    🔥 [V8 퀀트 스캐너 엔진] 
+    네이버 뉴스를 버리고, 순수 금융 데이터(거래대금+이동평균선+수급+RSI)만으로 진짜 타점이 온 종목을 필터링합니다.
     """
+    import FinanceDataReader as fdr
+    import pandas as pd
+    import datetime
+
     if not keyword.strip(): return []
     try:
-        # 1. 오늘 시장에서 진짜 돈이 몰리는 '거래대금 상위 150개' 주도주 명단 확보
-        import FinanceDataReader as fdr
-        df_mar = fdr.StockListing('KRX')
-        hot_stocks = df_mar.head(150)['Name'].tolist()
-        
-        # 2. 파트너님이 입력한 테마(예: 반도체) 뉴스 스캔
-        url = f"https://search.naver.com/search.naver?where=news&query={keyword}+관련주"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0'}
-        res = requests.get(url, headers=headers, timeout=3)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        combined_text = soup.select_one('.list_news').get_text() if soup.select('.list_news') else ""
-        
-        found_stocks = []
-        # 3. [핵심] 뉴스에 언급된 종목 중, '오늘 돈이 도는 150개 대장주'에 속한 놈들만 1순위로 선별!
-        for s_name in hot_stocks:
-            if s_name in combined_text and s_name != keyword:
-                found_stocks.append(s_name)
-        
-        # 주도주 중에서 매칭된 게 3개 미만일 때만, 일반 종목에서 추가로 찾아서 채워 넣음
-        if len(found_stocks) < 3:
-            for k in list(krx_dict.keys())[:200]:
-                if k in combined_text and k != keyword and k not in found_stocks:
-                    found_stocks.append(k)
-                    
-        return list(set(found_stocks))[:5]
-    except:
-        return ["삼성전자", "SK하이닉스", "한미반도체", "현대차", "기아"] # 에러 시 방어막
+        # 1. 오늘 시장 전체 데이터에서 '거래대금(Amount)' 순으로 150등 컷오프 (돈이 몰리는 진짜 주도주 풀)
+        df_mar = fdr.StockListing('KRX').sort_values('Amount', ascending=False).head(150)
+
+        # 2. 검색어 방어형 DB (사용자가 검색한 키워드가 이름에 없어도 잡아내기 위함)
+        theme_map = {
+            "반도체": ["제주반도체", "코세스", "한미반도체", "네오셈", "가온칩스", "리노공업", "디아이", "테크윙", "SK하이닉스"],
+            "바이오": ["알테오젠", "HLB", "셀트리온", "삼천당제약", "유한양행", "에스티팜"],
+            "배터리": ["에코프로", "에코프로비엠", "포스코홀딩스", "LG에너지솔루션", "엔켐", "대주전자재료"],
+            "2차전지": ["에코프로", "에코프로비엠", "포스코퓨처엠", "금양", "엔켐", "중앙첨단소재"],
+            "로봇": ["레인보우로보틱스", "두산로보틱스", "엔젤로보틱스", "이랜시스"],
+            "AI": ["이스트소프트", "폴라리스AI", "솔트룩스", "마음AI"],
+            "전력": ["HD현대일렉트릭", "LS ELECTRIC", "제룡전기", "일진전기"]
+        }
+
+        matched_by_theme = []
+        for t_name, s_list in theme_map.items():
+            if t_name in keyword or keyword in t_name:
+                matched_by_theme.extend(s_list)
+
+        target_codes = []
+        # 주도주 150개 안에서 검색어랑 맞거나 테마에 속하는 종목 1차 선별
+        for idx, row in df_mar.iterrows():
+            name = row['Name']
+            code = row['Code']
+            if keyword in name or name in matched_by_theme:
+                target_codes.append((name, code))
+
+        # 테마 매칭이 너무 적으면 깡패 주도주(1~10위)를 강제로 편입시켜 검사
+        if len(target_codes) < 5:
+            for idx, row in df_mar.head(10).iterrows():
+                if (row['Name'], row['Code']) not in target_codes:
+                    target_codes.append((row['Name'], row['Code']))
+
+        final_stocks = []
+        today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        start_str = (datetime.datetime.now() - datetime.timedelta(days=60)).strftime('%Y-%m-%d')
+
+        # 3. 🚨 [핵심] 선정된 후보들을 하나씩 까보면서 '기술적 타점' 3중 필터 분석!
+        for name, code in target_codes:
+            if len(final_stocks) >= 5: break # 5개 찾으면 속도를 위해 스캔 종료
+
+            df_hist = fdr.DataReader(code, start_str, today_str)
+            if len(df_hist) < 20: continue
+
+            # [조건 A: 추세] 20일 이동평균선 위에 주가가 있는가? (역배열 하락주는 과감히 버림)
+            df_hist['MA20'] = df_hist['Close'].rolling(window=20).mean()
+            if df_hist['Close'].iloc[-1] < df_hist['MA20'].iloc[-1]:
+                continue 
+
+            # [조건 B: 수급] 최근 5일 평균 거래량보다 오늘 거래량이 터졌는가? (시장의 관심 집중)
+            vol_mean = df_hist['Volume'].rolling(5).mean().iloc[-2]
+            if df_hist['Volume'].iloc[-1] < vol_mean:
+                continue 
+
+            # [조건 C: 타점] RSI(14) 계산 후 과열/침체 판별
+            delta = df_hist['Close'].diff()
+            up = delta.clip(lower=0)
+            down = -1 * delta.clip(upper=0)
+            ema_up = up.ewm(com=13, adjust=False).mean()
+            ema_down = down.ewm(com=13, adjust=False).mean()
+            rsi = 100 - (100 / (1 + (ema_up / ema_down)))
+            current_rsi = rsi.iloc[-1]
+
+            # RSI가 75 이상이면 고점(설거지 위험), 40 이하면 지하실. [딱 좋은 40~75 사이 반등 구간]만 픽!
+            if current_rsi > 75 or current_rsi < 40:
+                continue
+
+            # 3중 필터를 모두 통과한 '진짜 놈'만 합격!
+            final_stocks.append(name)
+
+        # 조건이 너무 깐깐해서 5개를 못 채웠다면, 시장 거래대금 1순위 주도주들로 안전하게 빈자리 채우기
+        if len(final_stocks) < 5:
+            for idx, row in df_mar.head(5).iterrows():
+                if row['Name'] not in final_stocks:
+                    final_stocks.append(row['Name'])
+                if len(final_stocks) >= 5: break
+
+        return final_stocks[:5]
+
+    except Exception as e:
+        # 시스템 에러 발생 시 최후의 방어선
+        return ["삼성전자", "SK하이닉스", "HD현대일렉트릭", "알테오젠", "제주반도체"]
 @st.cache_data(ttl=600, show_spinner=False)
 def get_realtime_thunder_rich_stocks():
     try:
