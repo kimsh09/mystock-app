@@ -917,11 +917,11 @@ if pure_code:
             breakout_profit = breakout_target * 1.03 # 단타 기본 3% 자율 익절 타겟
             
             # 2. 피봇(Pivot) 지지/저항선 (스윙 전용)
-            pivot = (yesterday_candle['High'] + today_candle['Low'] + today_candle['Close']) / 3
-            r1 = (2 * pivot) - today_candle['Low']
-            r2 = pivot + (today_candle['High'] - today_candle['Low'])
-            s1 = (2 * pivot) - today_candle['High']
-            s2 = pivot - (today_candle['High'] - today_candle['Low'])
+            pivot = (yesterday_candle['High'] + yesterday_candle['Low'] + yesterday_candle['Close']) / 3
+            r1 = (2 * pivot) - yesterday_candle['Low']
+            r2 = pivot + (yesterday_candle['High'] - yesterday_candle['Low'])
+            s1 = (2 * pivot) - yesterday_candle['High']
+            s2 = pivot - (yesterday_candle['High'] - yesterday_candle['Low'])
 
             pivot = int(pivot)
             r1 = int(r1)
