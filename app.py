@@ -905,39 +905,29 @@ if pure_code:
                 # 기본값은 현재 평단가보다 3% 낮게 자동 세팅
                 target_avg_price = st.number_input("희망하는 최종 평단가", value=float(chart_avg_price * 0.97), step=100.0 if unit=="원" else 1.0)
             
-    # 1. 계산에 필요한 기본 변수 선언 (가장 왼쪽 벽에 바짝 붙여 정렬)
+    with sim_col2:
+    st.markdown("**🤖 AI 역산 결과 리포트**")
+    
+    # 1. 변수 선언 (여기서부터는 윗줄인 with sim_col2: 보다 딱 한 칸(Tab) 안쪽으로 예쁘게 들어갑니다)
     latest_price_tmp = float(target_display_price) if 'target_display_price' in locals() else 0.0
     current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
 
-    sim_col2.markdown("**🤖 AI 역산 결과 리포트**")
-
-    # 겹겹이 쌓인 조건문을 일자로 평평하게 다림질했습니다. (들여쓰기 꼬임 완벽 차단)
+    # 2. 에러 원천 차단 3대장 (0으로 나누기, 엉뚱한 가격 입력 방어)
     if target_avg_price <= latest_price_tmp:
-        sim_col2.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다.")
-
+        st.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다.")
     elif target_avg_price >= current_avg_price:
-        sim_col2.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
-
+        st.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
     elif target_avg_price == latest_price_tmp:
-        sim_col2.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 대기하세요.")
-
-    else:
-        # 위의 모든 예외를 통과한 경우에만 안전하게 역산 실행
-        req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
-    
-        if req_qty > 0:
-            sim_col2.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
-            sim_col2.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
-    else:
-        sim_col2.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
-    else:
-        req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
+        st.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 대기하세요.")
         
+    # 3. 위의 모든 방어막을 통과한 '정상적인 물타기' 역산
+    else:
+        req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
         if req_qty > 0:
-            sim_col2.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
-            sim_col2.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
+            st.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
+            st.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
         else:
-            sim_col2.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
+            st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
 else:
     st.warning("⚠️ 역산 엔진을 가동하려면 하단 [포트폴리오 관리자]에 1차 매수 수량을 먼저 입력하고 저장하십시오.")
 
