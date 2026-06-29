@@ -909,20 +909,27 @@ if pure_code:
 latest_price_tmp = float(target_display_price) if 'target_display_price' in locals() else 0.0
 current_avg_price = tmp_cost_sum / tmp_qty_sum if tmp_qty_sum > 0 else 0
 
-# 2. 결과 리포트 타이틀 출력
 sim_col2.markdown("**🤖 AI 역산 결과 리포트**")
 
-# 3. PC 에디터 규격(Tab 1번 = 스페이스 4칸)에 맞춘 완벽 정렬 조건문
+# 겹겹이 쌓인 조건문을 일자로 평평하게 다림질했습니다. (들여쓰기 꼬임 완벽 차단)
 if target_avg_price <= latest_price_tmp:
-    sim_col2.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다. (현재 주가보다 낮게 맞추려면 주가가 더 내려가야 합니다)")
+    sim_col2.error("⚠️ 목표 평단가는 현재 주가보다 높아야 물타기로 맞출 수 있습니다.")
 
 elif target_avg_price >= current_avg_price:
     sim_col2.warning("💡 목표 평단가가 이미 현재 평단가보다 높거나 같습니다. 물을 탈 이유가 없습니다.")
 
+elif target_avg_price == latest_price_tmp:
+    sim_col2.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 대기하세요.")
+
 else:
-    # 🚨 목표가와 현재가가 완전히 똑같아서 분모가 0이 되는 치명적 에러 원천 차단!
-    if target_avg_price == latest_price_tmp:
-        sim_col2.warning("💡 목표 평단가와 현재 주가가 완전히 동일합니다. 추가 매수 없이 대기하세요.")
+    # 위의 모든 예외를 통과한 경우에만 안전하게 역산 실행
+    req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
+    
+    if req_qty > 0:
+        sim_col2.metric(label="✅ 지금 가격에서 즉시 추가 매수해야 할 수량", value=f"{math.ceil(req_qty):,} 주")
+        sim_col2.metric(label="💰 물타기에 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * latest_price_tmp)/10000):,} 만원")
+    else:
+        sim_col2.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
     else:
         req_qty = (tmp_cost_sum - tmp_qty_sum * target_avg_price) / (target_avg_price - latest_price_tmp)
         
