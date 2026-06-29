@@ -940,8 +940,6 @@ with sim_col2:
             st.metric(label="💰 필요한 추가 시드 자금", value=f"{int((math.ceil(req_qty) * _latest)/10000):,} 만원")
     else:
         st.success("🎉 이미 목표 평단가에 도달했거나 더 유리한 조건입니다.")
-    else:
-        st.warning("⚠️ 역산 엔진을 가동하려면 하단 [포트폴리오 관리자]에 1차 매수 수량을 먼저 입력하고 저장하십시오.")
 
     # 🚀 [신규 킬러 기능 1] 과거 2개년 AI 전략 승률 검증기
     with tab3:
