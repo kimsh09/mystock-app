@@ -354,78 +354,70 @@ def get_main_live_news(stock_name, count=4):
     except:
         return []
 
+# =====================================================================
+# 1️⃣ [섹터/테마 유망 종목 선별 엔진 & 검색창]
+# =====================================================================
+import streamlit as st
+import FinanceDataReader as fdr
+import datetime
+
 @st.cache_data(ttl=120, show_spinner=False)
 def search_theme_stocks_low_valuation(keyword):
-    import FinanceDataReader as fdr
-    import datetime
-    
-    # 키워드가 비어있으면 빈 리스트 반환
     if not keyword or not keyword.strip():
         return []
-        
     try:
-        # 1. 시장 전체에서 거래대금이 가장 활발한 상위 100개 종목(주도주 판데기) 먼저 확보
         df_krx = fdr.StockListing('KRX')
-        df_leads = df_krx.sort_values('Amount', ascending=False).head(100)
+        df_filtered = df_krx[~df_krx['Name'].str.contains("스팩|우선주|우|B|정리매매")].copy()
+        # 거래대금 상위 150개사 기준 검색
+        df_leads = df_filtered.sort_values('Amount', ascending=False).head(150)
         
-        # 차장님이 입력하신 테마/섹터 키워드 필터링
-        # (예: '반도체'를 입력하면 주도주 100개 중 종목명에 관련성이 있거나 수급 깡패인 종목 매칭)
-        matched_candidates = []
+        candidates = []
         for idx, row in df_leads.iterrows():
             name = row['Name']
             code = row['Code']
-            
-            # 잡주, 스팩, 우선주 필터링으로 1차 정화
-            if "스팩" in name or name.endswith("우") or name.endswith("B"): 
-                continue
+            if keyword.strip() in name:
+                candidates.append((code, name))
                 
-            # 키워드가 종목명에 포함되거나, 시장 주도주 탑클래스인 경우 후보군 등록
-            if keyword.strip() in name or len(matched_candidates) < 15:
-                matched_candidates.append((code, name))
-
         qualified_stocks = []
         today = datetime.datetime.now()
         start_date = (today - datetime.timedelta(days=45)).strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
 
-        # 2. 🔬 [V9 프리미엄 퀀트 3중 필터] 가동
-        for code, name in matched_candidates:
+        for code, name in candidates:
             df_hist = fdr.DataReader(code, start_date, end_date)
-            if len(df_hist) < 20: 
-                continue
-
+            if len(df_hist) < 20: continue
+            
             close = df_hist['Close'].iloc[-1]
             ma20 = df_hist['Close'].rolling(window=20).mean().iloc[-1]
+            if close < ma20: continue  # 필터 ①: 20일선 정배열 우상향
 
-            # 필터 ①: 20일선 위에 안착한 정배열 초입인가? (역배열 하락세 주식 칼같이 컷)
-            if close < ma20: 
-                continue
-
-            # 필터 ②: 수급/거래량 초입인가? (최근 5일 평균 거래량 대비 오늘 대량 거래 유입 확인)
             vol_mean_5d = df_hist['Volume'].rolling(5).mean().iloc[-2]
-            if df_hist['Volume'].iloc[-1] < vol_mean_5d * 1.2: 
-                continue
+            if df_hist['Volume'].iloc[-1] < vol_mean_5d * 1.2: continue  # 필터 ②: 거래량 유입 초입
 
-            # 필터 ③: 눌림목/RSI 안정권 (과열권인 RSI 70 이상을 제외한 매력적인 밸류에이션 구간)
             delta = df_hist['Close'].diff()
             gains = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
             losses = (-delta.clip(upper=0)).rolling(window=14).mean().iloc[-1]
             rsi = 100 - (100 / (1 + (gains / losses))) if losses > 0 else 50
             
-            # 너무 고점 과열이 아니면서 추세 상승 준비가 된 진짜 원석만 선별
-            if 35 <= rsi <= 65:
+            if 35 <= rsi <= 65:  # 필터 ③: 과열 탈피 눌림목 권역
                 qualified_stocks.append(name)
+            if len(qualified_stocks) >= 3: break
 
-            # 화면 레이아웃 상 가장 이쁘게 배치되는 3개 종목까지만 엄선
-            if len(qualified_stocks) >= 3: 
-                break
+        return qualified_stocks
+    except:
+        return []
 
-        # 만약 필터가 너무 까다로워 검출이 안 되면 시장 최고 주도주 안정빵 3개 강제 안착
-        return qualified_stocks if qualified_stocks else ["SK하이닉스", "삼성전자", "현대차"]
-
-    except Exception as e:
-        # 에러 발생 시 시스템 뻗지 않도록 방어막
-        return ["SK하이닉스", "삼성전자", "현대차"]
+# 🖥️ 1번 UI 화면 출력단
+theme_input = st.text_input("🔍 섹터/테마 검색 (예: 반도체, 구리, 전력)", value="")
+if theme_input:
+    st.markdown(f"#### 🎯 '{theme_input}' 테마 내 프리미엄 밸류 종목")
+    theme_res = search_theme_stocks_low_valuation(theme_input)
+    if theme_res:
+        cols = st.columns(len(theme_res))
+        for idx, stock in enumerate(theme_res):
+            cols[idx].info(f"⭐️ {stock}")
+    else:
+        st.info("현재 해당 테마 내에 V9 필터 조건을 만족하는 우량 원석이 없습니다.")
         
 @st.cache_data(ttl=600, show_spinner=False)
 def get_realtime_thunder_rich_stocks():
