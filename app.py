@@ -26,49 +26,59 @@ def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# 🟢 1. 기존에 위로 옮겨둔 함수를 이걸로 통째로 덮어쓰세요!
+# 🟢 기존 함수를 이 코드로 완전히 덮어쓰세요! (무제한 테마 검색 + 엉뚱한 종목 차단 + 밸류에이션 정렬)
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def get_highly_undervalued_theme_stocks(theme_keyword):
-    # 핵심 섹터 맵핑 딕셔너리
-    theme_map = {
-        "반도체": [("고영", "060310.KQ"), ("미래반도체", "149950.KQ"), ("삼성전자", "005930.KS"), ("SK하이닉스", "000660.KS"), ("한미반도체", "042700.KS")],
-        "이차전지": [("LG에너지솔루션", "373220.KS"), ("삼성SDI", "006400.KS"), ("포스코홀딩스", "005490.KS"), ("에코프로비엠", "247540.KQ"), ("에코프로", "086520.KQ")],
-        "바이오": [("삼성바이오로직스", "207940.KS"), ("셀트리온", "068270.KS"), ("유한양행", "000100.KS"), ("한미약품", "128940.KS"), ("알테오젠", "196170.KQ")],
-        "자동차": [("현대차", "005380.KS"), ("기아", "000270.KS"), ("현대모비스", "012330.KS"), ("HL만도", "204320.KS")],
-        "방산": [("한화에어로스페이스", "012450.KS"), ("현대로템", "064350.KS"), ("LIG넥스원", "079550.KS"), ("풍산", "103140.KS")],
-        "원전": [("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS"), ("한전KPS", "051600.KS"), ("한국전력", "015760.KS")]
-    }
+    if not theme_keyword.strip(): return []
     
-    matched_stocks = []
-    for key, stocks in theme_map.items():
-        if key in theme_keyword or theme_keyword in key:
-            matched_stocks = stocks
-            break
-            
-    if not matched_stocks:
-        return [] # 매칭 안 되면 빈 리스트 반환
+    try:
+        # 1. 파트너님의 오리지널 방식 복원: 네이버 뉴스 실시간 스크래핑으로 모든 테마 무제한 검색!
+        url = f"https://search.naver.com/search.naver?where=news&query={theme_keyword}+관련주+대장주"
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        news_text = soup.get_text()
         
-    valuation_list = []
-    for stock_name, ticker in matched_stocks:
-        try:
-            stock_info = yf.Ticker(ticker).info
-            pbr = stock_info.get('priceToBook', 1.0)
-            per = stock_info.get('trailingPE', 12.0)
-            if pbr is None: pbr = 1.0
-            if per is None: per = 12.0
+        stock_counts = {}
+        # 파트너님이 짜두신 krx_dict를 활용해 한국장 전체 종목을 대상으로 언급량 스캔
+        for stock_name, code in krx_dict.items():
+            if len(stock_name) > 1 and stock_name in news_text and stock_name != theme_keyword:
+                count = news_text.count(stock_name)
+                # 💡 스쳐 지나가는 무관한 종목을 걸러내기 위해, 뉴스에서 '2번 이상' 언급된 종목만 1차 합격!
+                if count >= 2:
+                    stock_counts[stock_name] = {"code": code, "count": count}
+                    
+        # 뉴스 언급량 상위 15개 종목을 1차 후보군으로 압축
+        sorted_candidates = sorted(stock_counts.items(), key=lambda x: x[1]["count"], reverse=True)[:15]
+        
+        if not sorted_candidates:
+            return []
             
-            # PBR 가중치를 높여 저평가 점수 산출
-            score = (pbr * 10) + per
-            valuation_list.append({"name": stock_name, "score": score})
-        except:
-            valuation_list.append({"name": stock_name, "score": 999})
-            
-    # 🎯 밸류에이션 점수(score)가 낮은 순서(저평가)대로 오름차순 정렬
-    valuation_list.sort(key=lambda x: x["score"])
-    
-    # 정렬된 종목 이름만 뽑아서 반환 (버튼 생성을 위해)
-    return [item["name"] for item in valuation_list]
+        # 2. 추출된 후보군을 파트너님의 '실시간 재무 분석기'로 넘겨서 '진짜 저평가' 순으로 2차 정렬!
+        valuation_list = []
+        for stock_name, data in sorted_candidates:
+            code = data["code"]
+            try:
+                # 💡 파트너님 코드에 이미 존재하는 펀더멘탈 추출 함수(get_real_fundamentals)를 그대로 활용!
+                pbr_val, net_per, _ = get_real_fundamentals(code, False, "")
+                
+                # 적자 기업이나 비정상 데이터(가짜 테마주) 페널티 부여 -> 후순위로 밀어버림
+                if pbr_val <= 0.1: pbr_val = 5.0
+                if net_per <= 0.1 or net_per >= 100: net_per = 100.0
+                
+                # 가치평가 점수 산출
+                score = (pbr_val * 10) + net_per
+                valuation_list.append({"name": stock_name, "score": score})
+            except:
+                valuation_list.append({"name": stock_name, "score": 999})
+                
+        # 🎯 밸류에이션 점수가 낮은(초저평가 우량주) 순서대로 최종 오름차순 정렬
+        valuation_list.sort(key=lambda x: x["score"])
+        
+        # 사이드바 버튼으로 예쁘게 띄워줄 상위 7개 대장주 이름만 반환
+        return [item["name"] for item in valuation_list[:7]]
+    except:
+        return []
 
 # 내부 경고 강제 차단
 warnings.filterwarnings('ignore')
