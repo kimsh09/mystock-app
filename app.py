@@ -177,6 +177,39 @@ def fetch_yf_data(ticker, period="2y"):
         return df
     except:
         return pd.DataFrame()
+        # 🟢 위 함수 바로 밑에 이 코드를 복사해서 통째로 붙여넣으세요!
+
+def calculate_dynamic_reward_risk(df):
+    """
+    차트 데이터(df)를 기반으로 고정값 1.07 버그를 깨고, 
+    최근 20거래일 기준 동적 기대 손익비를 수학적으로 연산하는 엔진
+    """
+    # 기본 방어값 설정
+    reward_risk_ratio = 1.07 
+    
+    if df is not None and not df.empty and len(df) >= 20:
+        try:
+            # 최근 20거래일 채널 분석
+            high_20 = float(df['High'].tail(20).max())
+            low_20 = float(df['Low'].tail(20).min())
+            current_price = float(df['Close'].iloc[-1])
+            
+            # 분모(목표가 - 현재가)가 0이 되거나 갇히는 현상 방지 안전장치
+            denom = high_20 - current_price
+            if denom <= 0:
+                denom = current_price * 0.01  # 최소 1%의 여유 버퍼 설정
+                
+            # 🎯 동적 손익비 계산 공식 적용 (소수점 둘째자리 반올림)
+            # 수식: (현재가 - 20일최저가) / (20일최고가 - 현재가)
+            reward_risk_ratio = round((current_price - low_20) / denom, 2)
+            
+            # 주가가 채널을 이탈해 마이너스가 나오면 표준 방어값으로 보정
+            if reward_risk_ratio <= 0:
+                reward_risk_ratio = 1.07
+        except:
+            reward_risk_ratio = 1.07
+            
+    return reward_risk_ratio
     # 🚀 [추가] 실시간 배당률 자동 스크래핑 엔진
 
 # 🚀 [수정 1] 미국 ETF 배당금(달러)을 수익률로 착각하는 야후 파이낸스 버그 완벽 제어 (v5 엔진)
