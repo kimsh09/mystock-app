@@ -26,20 +26,18 @@ def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+# 🟢 1. 기존에 위로 옮겨둔 함수를 이걸로 통째로 덮어쓰세요!
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_highly_undervalued_theme_stocks(theme_keyword):
-    """
-    정확한 섹터/테마 맵핑 데이터를 기반으로 관련 종목을 추출한 후,
-    실제 야후파이낸스 멀티플 데이터를 수집하여 저평가 순으로 정렬하는 엔진
-    """
-    # 2026년 주도 섹터 맵핑 딕셔너리 및 종목별 정확한 티커 매칭
+    # 핵심 섹터 맵핑 딕셔너리
     theme_map = {
         "반도체": [("고영", "060310.KQ"), ("미래반도체", "149950.KQ"), ("삼성전자", "005930.KS"), ("SK하이닉스", "000660.KS"), ("한미반도체", "042700.KS")],
         "이차전지": [("LG에너지솔루션", "373220.KS"), ("삼성SDI", "006400.KS"), ("포스코홀딩스", "005490.KS"), ("에코프로비엠", "247540.KQ"), ("에코프로", "086520.KQ")],
         "바이오": [("삼성바이오로직스", "207940.KS"), ("셀트리온", "068270.KS"), ("유한양행", "000100.KS"), ("한미약품", "128940.KS"), ("알테오젠", "196170.KQ")],
         "자동차": [("현대차", "005380.KS"), ("기아", "000270.KS"), ("현대모비스", "012330.KS"), ("HL만도", "204320.KS")],
         "방산": [("한화에어로스페이스", "012450.KS"), ("현대로템", "064350.KS"), ("LIG넥스원", "079550.KS"), ("풍산", "103140.KS")],
-        "원전/에너지": [("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS"), ("한전KPS", "051600.KS"), ("한국전력", "015760.KS")]
+        "원전": [("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS"), ("한전KPS", "051600.KS"), ("한국전력", "015760.KS")]
     }
     
     matched_stocks = []
@@ -49,42 +47,28 @@ def get_highly_undervalued_theme_stocks(theme_keyword):
             break
             
     if not matched_stocks:
-        return pd.DataFrame()
+        return [] # 매칭 안 되면 빈 리스트 반환
         
     valuation_list = []
     for stock_name, ticker in matched_stocks:
         try:
-            # 🔍 실제 야후파이낸스 데이터를 통해 재무 지표 추출
             stock_info = yf.Ticker(ticker).info
-            
-            # 지표 획득 실패 시 기본 표준 배수 방어 코드 지정
             pbr = stock_info.get('priceToBook', 1.0)
             per = stock_info.get('trailingPE', 12.0)
+            if pbr is None: pbr = 1.0
+            if per is None: per = 12.0
             
-            # None 값 예외 방어
-            if pbr is None or math.isnan(pbr): pbr = 1.0
-            if per is None or math.isnan(per): per = 12.0
-            
-            # 🎯 밸류에이션 점수 연산 (PBR가중치 + PER가중치) -> 점수가 낮을수록 저평가 알짜주
-            valuation_score = round((pbr * 10) + per, 2)
-            
-            valuation_list.append({
-                "종목명": stock_name,
-                "PBR (배)": round(pbr, 2),
-                "PER (배)": round(per, 2),
-                "밸류에이션 점수": valuation_score
-            })
+            # PBR 가중치를 높여 저평가 점수 산출
+            score = (pbr * 10) + per
+            valuation_list.append({"name": stock_name, "score": score})
         except:
-            continue
+            valuation_list.append({"name": stock_name, "score": 999})
             
-    if not valuation_list:
-        return pd.DataFrame()
-        
-    df_theme = pd.DataFrame(valuation_list)
+    # 🎯 밸류에이션 점수(score)가 낮은 순서(저평가)대로 오름차순 정렬
+    valuation_list.sort(key=lambda x: x["score"])
     
-    # 🏆 초저평가 종목 순서로 오름차순 정렬
-    df_theme = df_theme.sort_values(by="밸류에이션 점수", ascending=True).reset_index(drop=True)
-    return df_theme
+    # 정렬된 종목 이름만 뽑아서 반환 (버튼 생성을 위해)
+    return [item["name"] for item in valuation_list]
 
 # 내부 경고 강제 차단
 warnings.filterwarnings('ignore')
