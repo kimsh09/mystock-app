@@ -386,51 +386,55 @@ def get_main_live_news(stock_name, count=4):
 
 # 🟢 기존 테마 검색 함수 자리에 이 코드를 통째로 덮어쓰세요!
 
+# 🟢 기존 함수 블록에 이 코드를 통째로 덮어쓰세요! (에러 완벽 해결 버전)
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_highly_undervalued_theme_stocks(theme_keyword):
     """
     정확한 섹터/테마 맵핑 데이터를 기반으로 관련 종목을 추출한 후,
-    PER 및 PBR 가치 평가 점수가 낮은 순(저평가 우량주)으로 정렬하여 반환하는 엔진
+    실제 야후파이낸스 멀티플 데이터를 수집하여 저평가 순으로 정렬하는 엔진
     """
-    # 1. 2026년 기준 대한민국 증시를 주도하는 6대 핵심 섹터/테마 가이드 맵핑
+    # 2026년 주도 섹터 맵핑 딕셔너리 및 종목별 정확한 티커 매칭
     theme_map = {
-        "반도체": ["고영", "미래반도체", "삼성전자", "SK하이닉스", "한미반도체", "리노공업", "이오테크닉스", "HPSP", "주성엔지니어링", "DB하이텍"],
-        "이차전지": ["LG에너지솔루션", "삼성SDI", "포스코홀딩스", "에코프로비엠", "에코프로", "엘앤에프", "포스코퓨처엠", "금양"],
-        "바이오": ["삼성바이오로직스", "셀트리온", "유한양행", "한미약품", "HLB", "알테오젠", "리가켐바이오"],
-        "자동차": ["현대차", "기아", "현대모비스", "한온시스템", "HL만도", "현대위아"],
-        "방산": ["한화에어로스페이스", "현대로템", "LIG넥스원", "한국항공우주", "풍산"],
-        "원전/에너지": ["두산에너빌리티", "한전기술", "한전KPS", "우리기술", "일진파워", "한국전력"]
+        "반도체": [("고영", "060310.KQ"), ("미래반도체", "149950.KQ"), ("삼성전자", "005930.KS"), ("SK하이닉스", "000660.KS"), ("한미반도체", "042700.KS")],
+        "이차전지": [("LG에너지솔루션", "373220.KS"), ("삼성SDI", "006400.KS"), ("포스코홀딩스", "005490.KS"), ("에코프로비엠", "247540.KQ"), ("에코프로", "086520.KQ")],
+        "바이오": [("삼성바이오로직스", "207940.KS"), ("셀트리온", "068270.KS"), ("유한양행", "000100.KS"), ("한미약품", "128940.KS"), ("알테오젠", "196170.KQ")],
+        "자동차": [("현대차", "005380.KS"), ("기아", "000270.KS"), ("현대모비스", "012330.KS"), ("HL만도", "204320.KS")],
+        "방산": [("한화에어로스페이스", "012450.KS"), ("현대로템", "064350.KS"), ("LIG넥스원", "079550.KS"), ("풍산", "103140.KS")],
+        "원전/에너지": [("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS"), ("한전KPS", "051600.KS"), ("한국전력", "015760.KS")]
     }
     
-    # 키워드 포함 여부 매칭 (예: '반도체주', 'AI반도체' 입력 시에도 '반도체'로 인식)
     matched_stocks = []
     for key, stocks in theme_map.items():
         if key in theme_keyword or theme_keyword in key:
             matched_stocks = stocks
             break
             
-    # 매칭되는 명확한 테마가 없을 경우 기본 검색 가이드 처리
     if not matched_stocks:
-        return pd.DataFrame() # 빈 데이터프레임 반환하여 메인 화면에서 안내
+        return pd.DataFrame()
         
-    # 2. 추출된 테마 관련 종목들의 밸류에이션(저평가) 데이터 수집 및 연산
     valuation_list = []
-    for stock_name in matched_stocks:
+    for stock_name, ticker in matched_stocks:
         try:
-            # 파트너님의 기존 코드 내 fdr 또는 네이버 스크래핑 엔진을 연동하여 멀티플 추출
-            # 여기서는 검증을 위해 안전하게 가치 분석 지표를 연동하는 로직을 태웁니다.
-            ticker = stock_name # 실제 가동 시 이름-티커 변환 맵핑 적용 가능
+            # 🔍 실제 야후파이낸스 데이터를 통해 재무 지표 추출
+            stock_info = yf.Ticker(ticker).info
             
-            # 예시용 표준 가치 지표 산출 (실제 수집된 데이터프레임 정보 기준)
-            # 여기서는 구조 이해를 돕기 위해 표준 타겟 스케일을 제공합니다.
-            pbr = random.uniform(0.5, 2.5)  # 임시 멀티플 (실제 데이터 연동 구문으로 대체 가능)
-            per = random.uniform(5.0, 25.0) # 임시 멀티플
+            # 지표 획득 실패 시 기본 표준 배수 방어 코드 지정
+            pbr = stock_info.get('priceToBook', 1.0)
+            per = stock_info.get('trailingPE', 12.0)
+            
+            # None 값 예외 방어
+            if pbr is None or math.isnan(pbr): pbr = 1.0
+            if per is None or math.isnan(per): per = 12.0
+            
+            # 🎯 밸류에이션 점수 연산 (PBR가중치 + PER가중치) -> 점수가 낮을수록 저평가 알짜주
+            valuation_score = round((pbr * 10) + per, 2)
             
             valuation_list.append({
                 "종목명": stock_name,
-                "PBR(배)": round(pbr, 2),
-                "PER(배)": round(per, 2),
-                "밸류에이션 점수": round((pbr * 10) + per, 2) # 점수가 낮을수록 초저평가
+                "PBR (배)": round(pbr, 2),
+                "PER (배)": round(per, 2),
+                "밸류에이션 점수": valuation_score
             })
         except:
             continue
@@ -440,7 +444,7 @@ def get_highly_undervalued_theme_stocks(theme_keyword):
         
     df_theme = pd.DataFrame(valuation_list)
     
-    # 🎯 3. 밸류에이션 점수가 낮은 순(초저평가 순)으로 랭킹 정렬
+    # 🏆 초저평가 종목 순서로 오름차순 정렬
     df_theme = df_theme.sort_values(by="밸류에이션 점수", ascending=True).reset_index(drop=True)
     return df_theme
     
