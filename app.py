@@ -539,21 +539,28 @@ for idx, r_name in enumerate(radar_5_stocks):
         st.rerun()
 
 
-# 🚀 [수정] 무관한 잡주 완벽 제거, 시장 거래대금 Top 150 우량주 리스트 기반 테마 스크리너
+# 🟢 지운 자리에 이 코드를 그대로 덮어쓰세요!
+
 st.sidebar.markdown("**🔗 섹터/테마 연관 레이더**")
-theme_keyword = st.sidebar.text_input("테마입력", value="", placeholder="예: 구리, AI반도체", label_visibility="collapsed")
+theme_keyword = st.sidebar.text_input("테마입력", value="", placeholder="예: 반도체, 방산, 원전/에너지", label_visibility="collapsed")
+
 if theme_keyword:
-    with st.sidebar.spinner("핵심 주도주 필터링 중..."):
-        # 메인 UI를 침범하지 않고 사이드바 내부에서만 완벽 스캔
-        matched_themes = search_theme_stocks_low_valuation(theme_keyword)
-    if matched_themes:
-        st.sidebar.caption("🏅 시장 공인 핵심 주도주 명단")
-        for rank, t_name in enumerate(matched_themes):
-            if st.sidebar.button(f"💎 {rank+1}위: {t_name}", key=f"theme_v2_{t_name}", use_container_width=True):
-                st.session_state['current_stock'] = t_name
-                st.rerun()
+    # 탭이나 메인화면 최상단에 보기 좋게 강조 마크다운 생성
+    st.markdown("---")
+    st.subheader(f"📊 [{theme_keyword}] 섹터 내 AI 엄선 저평가 우량주 랭킹")
+    
+    # 밸류에이션 점수 연산 함수 호출
+    df_theme_result = get_highly_undervalued_theme_stocks(theme_keyword)
+    
+    if not df_theme_result.empty:
+        # 데이터프레임을 테이블 형태로 메인 대시보드에 표출 (저평가 종목일수록 연녹색 강조)
+        st.dataframe(
+            df_theme_result.style.background_gradient(cmap='YlGn', subset=['밸류에이션 점수']),
+            use_container_width=True
+        )
+        st.info("💡 **[가치투자 가이드]** '밸류에이션 점수'가 낮을수록 자산(PBR) 및 이익(PER) 체력 대비 크게 저평가된 매력적인 알짜 종목입니다.")
     else:
-        st.sidebar.warning("우량 주도주군에 매칭된 종목이 없습니다.")
+        st.warning("⚠️ 입력하신 테마와 일치하는 핵심 섹터를 찾지 못했습니다. 정확한 키워드(반도체, 이차전지, 바이오, 자동차, 방산, 원전/에너지)를 입력해 주세요.")
 
 with st.sidebar.expander("⭐ 관심종목 즐겨찾기 명단", expanded=True):
     if st.button(f"➕ 현재 분석 종목 추가", use_container_width=True):
