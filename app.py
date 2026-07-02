@@ -543,28 +543,28 @@ for idx, r_name in enumerate(radar_5_stocks):
         st.rerun()
 
 
-# 🟢 지운 자리에 이 코드를 그대로 덮어쓰세요!
+# 🟢 243번째 줄 'theme_keyword = st.sidebar.text_input(...)' 부터 아래 if문 전체를 이 코드로 교체하세요!
 
 st.sidebar.markdown("**🔗 섹터/테마 연관 레이더**")
-theme_keyword = st.sidebar.text_input("테마입력", value="", placeholder="예: 반도체, 방산, 원전/에너지", label_visibility="collapsed")
+theme_keyword = st.sidebar.text_input("테마입력", value="", placeholder="예: 반도체, 방산, 원전", label_visibility="collapsed")
 
 if theme_keyword:
-    # 탭이나 메인화면 최상단에 보기 좋게 강조 마크다운 생성
+    # 탭이나 메인화면 최상단에 구분선과 함께 저평가 순위표 헤더 생성
     st.markdown("---")
     st.subheader(f"📊 [{theme_keyword}] 섹터 내 AI 엄선 저평가 우량주 랭킹")
     
-    # 밸류에이션 점수 연산 함수 호출
+    # 🔥 에러의 원인이었던 옛날 함수 대신, 새로 만든 실제 데이터 연산 함수를 정확히 호출합니다!
     df_theme_result = get_highly_undervalued_theme_stocks(theme_keyword)
     
     if not df_theme_result.empty:
-        # 데이터프레임을 테이블 형태로 메인 대시보드에 표출 (저평가 종목일수록 연녹색 강조)
+        # 데이터프레임을 테이블 형태로 메인 대시보드에 깔끔하게 출력
         st.dataframe(
             df_theme_result.style.background_gradient(cmap='YlGn', subset=['밸류에이션 점수']),
             use_container_width=True
         )
         st.info("💡 **[가치투자 가이드]** '밸류에이션 점수'가 낮을수록 자산(PBR) 및 이익(PER) 체력 대비 크게 저평가된 매력적인 알짜 종목입니다.")
     else:
-        st.warning("⚠️ 입력하신 테마와 일치하는 핵심 섹터를 찾지 못했습니다. 정확한 키워드(반도체, 이차전지, 바이오, 자동차, 방산, 원전/에너지)를 입력해 주세요.")
+        st.warning("⚠️ 입력하신 테마와 일치하는 핵심 섹터를 찾지 못했습니다. 정확한 키워드(반도체, 이차전지, 바이오, 자동차, 방산, 원전)를 입력해 주세요.")
 
 with st.sidebar.expander("⭐ 관심종목 즐겨찾기 명단", expanded=True):
     if st.button(f"➕ 현재 분석 종목 추가", use_container_width=True):
