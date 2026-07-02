@@ -26,56 +26,56 @@ def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# 🟢 기존 함수를 이 코드로 완전히 덮어쓰세요! (무제한 테마 검색 + 엉뚱한 종목 차단 + 밸류에이션 정렬)
+# 🟢 기존 함수를 이 코드로 완전히 덮어쓰세요! (네이버 헛개비 종목 완벽 차단 버전)
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_highly_undervalued_theme_stocks(theme_keyword):
     if not theme_keyword.strip(): return []
     
     try:
-        # 1. 파트너님의 오리지널 방식 복원: 네이버 뉴스 실시간 스크래핑으로 모든 테마 무제한 검색!
         url = f"https://search.naver.com/search.naver?where=news&query={theme_keyword}+관련주+대장주"
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3)
         soup = BeautifulSoup(res.text, 'html.parser')
-        news_text = soup.get_text()
+        
+        # 🚨 [핵심 수정] 페이지 전체(메뉴, 푸터)가 아닌 '뉴스 기사 제목(.news_tit)'과 '본문 요약(.dsc_txt_wrap)'만 정밀 타겟팅!
+        news_elements = soup.select('.news_tit, .dsc_txt_wrap')
+        news_text = " ".join([el.get_text() for el in news_elements])
         
         stock_counts = {}
-        # 파트너님이 짜두신 krx_dict를 활용해 한국장 전체 종목을 대상으로 언급량 스캔
+        # 웹페이지 자체 UI나 광고에 자주 등장해서 오해를 사는 함정 종목 블랙리스트
+        blacklist = ['네이버', 'NAVER', '카카오', 'kakao']
+        
         for stock_name, code in krx_dict.items():
-            if len(stock_name) > 1 and stock_name in news_text and stock_name != theme_keyword:
-                count = news_text.count(stock_name)
-                # 💡 스쳐 지나가는 무관한 종목을 걸러내기 위해, 뉴스에서 '2번 이상' 언급된 종목만 1차 합격!
-                if count >= 2:
-                    stock_counts[stock_name] = {"code": code, "count": count}
-                    
-        # 뉴스 언급량 상위 15개 종목을 1차 후보군으로 압축
+            if len(stock_name) > 1 and stock_name not in blacklist and stock_name != theme_keyword:
+                if stock_name in news_text:
+                    # 뉴스 기사 본문에만 집중하므로 1번만 언급되어도 유효타로 인정
+                    count = news_text.count(stock_name)
+                    if count >= 1: 
+                        stock_counts[stock_name] = {"code": code, "count": count}
+                        
         sorted_candidates = sorted(stock_counts.items(), key=lambda x: x[1]["count"], reverse=True)[:15]
         
         if not sorted_candidates:
             return []
             
-        # 2. 추출된 후보군을 파트너님의 '실시간 재무 분석기'로 넘겨서 '진짜 저평가' 순으로 2차 정렬!
         valuation_list = []
         for stock_name, data in sorted_candidates:
             code = data["code"]
             try:
-                # 💡 파트너님 코드에 이미 존재하는 펀더멘탈 추출 함수(get_real_fundamentals)를 그대로 활용!
+                # 펀더멘탈 추출
                 pbr_val, net_per, _ = get_real_fundamentals(code, False, "")
                 
-                # 적자 기업이나 비정상 데이터(가짜 테마주) 페널티 부여 -> 후순위로 밀어버림
+                # 적자 기업 페널티
                 if pbr_val <= 0.1: pbr_val = 5.0
                 if net_per <= 0.1 or net_per >= 100: net_per = 100.0
                 
-                # 가치평가 점수 산출
                 score = (pbr_val * 10) + net_per
                 valuation_list.append({"name": stock_name, "score": score})
             except:
                 valuation_list.append({"name": stock_name, "score": 999})
                 
-        # 🎯 밸류에이션 점수가 낮은(초저평가 우량주) 순서대로 최종 오름차순 정렬
         valuation_list.sort(key=lambda x: x["score"])
         
-        # 사이드바 버튼으로 예쁘게 띄워줄 상위 7개 대장주 이름만 반환
         return [item["name"] for item in valuation_list[:7]]
     except:
         return []
