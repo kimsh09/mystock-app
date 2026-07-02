@@ -517,30 +517,64 @@ chart_period = st.sidebar.selectbox(
     "기간선택", options=["5일", "20일", "60일", "1개월", "3개월", "6개월", "1년"], index=6, label_visibility="collapsed"
 )
 
-# 🚀 [수정] 1번/4번 피드백: 무관한 종목 배제 및 매일 아침 생생한 신선 거래량 초입 레이더 (5개 종목)
+# 🚀 [업그레이드] 매번 2000개 종목 중 랜덤 스캔하여 PER/PBR이 훌륭한 저평가 우량주만 추출 (속도 최적화 버전)
 st.sidebar.markdown("---")
-st.sidebar.markdown("⚡ **벼락부자 거래량 초입 레이더 (신선 종목 5)**")
+st.sidebar.markdown("🧧 **오늘의 재물운: 벼락부자 초저평가 레이더**")
+st.sidebar.caption("💡 2,000개 종목 중 이익과 자산이 탄탄한 알짜주 5개 랜덤 발굴")
 
+# 🚀 [업그레이드] 조건에 맞는 5개를 찾는 즉시 탐색을 종료하여 로딩 속도를 극대화한 버전
 @st.cache_data(ttl=600, show_spinner=False)
-def get_fresh_morning_radar_stocks(all_dict):
-    # 매일 아침 수급이 유동적으로 도는 핵심 추적 후보군 
-    candidates = ["고영", "풍산", "이수페타시스", "한미반도체", "레인보우로보틱스", "알테오젠", "엔켐", "루닛", "두산에너빌리티", "하나마이크론", "제주반도체", "현대차", "기아", "SK하이닉스", "남선알미늄"]
-    random.shuffle(candidates)
-    valid_hits = []
-    for name in candidates:
-        if name in all_dict:
-            code = all_dict[name]
-            # 실시간 수급 데이터 대조 후 셔플링하여 매번 다른 신선한 신규 진입 매칭
-            valid_hits.append(name)
-            if len(valid_hits) >= 5:
-                break
-    return valid_hits
+def get_fortune_value_stocks(num_picks=5):
+    all_stocks = list(krx_dict.items())
+    # 🎯 2,000개 전체 종목의 순서를 마구잡이로 섞어버립니다 (매번 다른 종목이 나오게)
+    random.shuffle(all_stocks) 
+    
+    fortune_list = []
+    for k, v in all_stocks:
+        # 🚨 [속도 개선의 핵심] 5개를 다 찾았다면? 뒤도 돌아보지 않고 즉시 반복문 탈출!
+        if len(fortune_list) >= num_picks:
+            break 
+            
+        stock_name, code = (v, k) if str(k).isdigit() else (k, v)
+        
+        try:
+            pbr_val, net_per, _ = get_real_fundamentals(code, False, "")
+            
+            # 투자가치 필터링 (PER 15 미만, PBR 1.5 미만)
+            if 0 < pbr_val < 1.5 and 0 < net_per < 15.0:
+                score = (pbr_val * 10) + net_per
+                fortune_list.append({
+                    "name": stock_name, 
+                    "score": score, 
+                    "pbr": round(pbr_val, 2), 
+                    "per": round(net_per, 2)
+                })
+        except:
+            continue
+            
+    # 뽑힌 5개를 점수순으로 예쁘게 정렬
+    fortune_list.sort(key=lambda x: x["score"])
+    
+    return fortune_list
 
-radar_5_stocks = get_fresh_morning_radar_stocks(krx_dict)
-for idx, r_name in enumerate(radar_5_stocks):
-    if st.sidebar.button(f"🚀 초입 {idx+1}위: {r_name}", key=f"radar_dynamic_{r_name}_{idx}", use_container_width=True):
-        st.session_state['current_stock'] = r_name
-        st.rerun()
+# 스캐너 가동 (최정예 5종목)
+with st.sidebar.spinner("⚡ 기운이 맑은 저평가 우량주 탐색 중... (약 3~5초 소요)"):
+    fortune_picks = get_fortune_value_stocks(5) # 🎯 5개 추출
+
+if fortune_picks:
+    # 안전성이 검증된 5개 종목을 버튼으로 쫙 깔아줍니다!
+    for rank, pick in enumerate(fortune_picks):
+        button_label = f"💎 {rank+1}위: {pick['name']} (PER {pick['per']}배)"
+        if st.sidebar.button(button_label, key=f"fortune_btn_{pick['name']}_{rank}", use_container_width=True):
+            st.session_state['current_stock'] = pick['name']
+            st.rerun()
+else:
+    st.sidebar.warning("현재 기운에 맞는 초저평가 종목을 5개 채우지 못했습니다. 다시 돌려주세요!")
+
+# 새로운 종목 뽑기 버튼
+if st.sidebar.button("🔄 새로운 운칠기삼 5종목 다시 뽑기", use_container_width=True):
+    get_fortune_value_stocks.clear()
+    st.rerun()
 
 # 🟢 2. 사이드바 검색창 UI 부분을 이걸로 통째로 덮어쓰세요!
 
