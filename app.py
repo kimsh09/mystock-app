@@ -26,6 +26,66 @@ def save_local_db(file_name, data):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_highly_undervalued_theme_stocks(theme_keyword):
+    """
+    정확한 섹터/테마 맵핑 데이터를 기반으로 관련 종목을 추출한 후,
+    실제 야후파이낸스 멀티플 데이터를 수집하여 저평가 순으로 정렬하는 엔진
+    """
+    # 2026년 주도 섹터 맵핑 딕셔너리 및 종목별 정확한 티커 매칭
+    theme_map = {
+        "반도체": [("고영", "060310.KQ"), ("미래반도체", "149950.KQ"), ("삼성전자", "005930.KS"), ("SK하이닉스", "000660.KS"), ("한미반도체", "042700.KS")],
+        "이차전지": [("LG에너지솔루션", "373220.KS"), ("삼성SDI", "006400.KS"), ("포스코홀딩스", "005490.KS"), ("에코프로비엠", "247540.KQ"), ("에코프로", "086520.KQ")],
+        "바이오": [("삼성바이오로직스", "207940.KS"), ("셀트리온", "068270.KS"), ("유한양행", "000100.KS"), ("한미약품", "128940.KS"), ("알테오젠", "196170.KQ")],
+        "자동차": [("현대차", "005380.KS"), ("기아", "000270.KS"), ("현대모비스", "012330.KS"), ("HL만도", "204320.KS")],
+        "방산": [("한화에어로스페이스", "012450.KS"), ("현대로템", "064350.KS"), ("LIG넥스원", "079550.KS"), ("풍산", "103140.KS")],
+        "원전/에너지": [("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS"), ("한전KPS", "051600.KS"), ("한국전력", "015760.KS")]
+    }
+    
+    matched_stocks = []
+    for key, stocks in theme_map.items():
+        if key in theme_keyword or theme_keyword in key:
+            matched_stocks = stocks
+            break
+            
+    if not matched_stocks:
+        return pd.DataFrame()
+        
+    valuation_list = []
+    for stock_name, ticker in matched_stocks:
+        try:
+            # 🔍 실제 야후파이낸스 데이터를 통해 재무 지표 추출
+            stock_info = yf.Ticker(ticker).info
+            
+            # 지표 획득 실패 시 기본 표준 배수 방어 코드 지정
+            pbr = stock_info.get('priceToBook', 1.0)
+            per = stock_info.get('trailingPE', 12.0)
+            
+            # None 값 예외 방어
+            if pbr is None or math.isnan(pbr): pbr = 1.0
+            if per is None or math.isnan(per): per = 12.0
+            
+            # 🎯 밸류에이션 점수 연산 (PBR가중치 + PER가중치) -> 점수가 낮을수록 저평가 알짜주
+            valuation_score = round((pbr * 10) + per, 2)
+            
+            valuation_list.append({
+                "종목명": stock_name,
+                "PBR (배)": round(pbr, 2),
+                "PER (배)": round(per, 2),
+                "밸류에이션 점수": valuation_score
+            })
+        except:
+            continue
+            
+    if not valuation_list:
+        return pd.DataFrame()
+        
+    df_theme = pd.DataFrame(valuation_list)
+    
+    # 🏆 초저평가 종목 순서로 오름차순 정렬
+    df_theme = df_theme.sort_values(by="밸류에이션 점수", ascending=True).reset_index(drop=True)
+    return df_theme
+
 # 내부 경고 강제 차단
 warnings.filterwarnings('ignore')
 
@@ -384,69 +444,6 @@ def get_main_live_news(stock_name, count=4):
     except:
         return []
 
-# 🟢 기존 테마 검색 함수 자리에 이 코드를 통째로 덮어쓰세요!
-
-# 🟢 기존 함수 블록에 이 코드를 통째로 덮어쓰세요! (에러 완벽 해결 버전)
-
-@st.cache_data(ttl=300, show_spinner=False)
-def get_highly_undervalued_theme_stocks(theme_keyword):
-    """
-    정확한 섹터/테마 맵핑 데이터를 기반으로 관련 종목을 추출한 후,
-    실제 야후파이낸스 멀티플 데이터를 수집하여 저평가 순으로 정렬하는 엔진
-    """
-    # 2026년 주도 섹터 맵핑 딕셔너리 및 종목별 정확한 티커 매칭
-    theme_map = {
-        "반도체": [("고영", "060310.KQ"), ("미래반도체", "149950.KQ"), ("삼성전자", "005930.KS"), ("SK하이닉스", "000660.KS"), ("한미반도체", "042700.KS")],
-        "이차전지": [("LG에너지솔루션", "373220.KS"), ("삼성SDI", "006400.KS"), ("포스코홀딩스", "005490.KS"), ("에코프로비엠", "247540.KQ"), ("에코프로", "086520.KQ")],
-        "바이오": [("삼성바이오로직스", "207940.KS"), ("셀트리온", "068270.KS"), ("유한양행", "000100.KS"), ("한미약품", "128940.KS"), ("알테오젠", "196170.KQ")],
-        "자동차": [("현대차", "005380.KS"), ("기아", "000270.KS"), ("현대모비스", "012330.KS"), ("HL만도", "204320.KS")],
-        "방산": [("한화에어로스페이스", "012450.KS"), ("현대로템", "064350.KS"), ("LIG넥스원", "079550.KS"), ("풍산", "103140.KS")],
-        "원전/에너지": [("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS"), ("한전KPS", "051600.KS"), ("한국전력", "015760.KS")]
-    }
-    
-    matched_stocks = []
-    for key, stocks in theme_map.items():
-        if key in theme_keyword or theme_keyword in key:
-            matched_stocks = stocks
-            break
-            
-    if not matched_stocks:
-        return pd.DataFrame()
-        
-    valuation_list = []
-    for stock_name, ticker in matched_stocks:
-        try:
-            # 🔍 실제 야후파이낸스 데이터를 통해 재무 지표 추출
-            stock_info = yf.Ticker(ticker).info
-            
-            # 지표 획득 실패 시 기본 표준 배수 방어 코드 지정
-            pbr = stock_info.get('priceToBook', 1.0)
-            per = stock_info.get('trailingPE', 12.0)
-            
-            # None 값 예외 방어
-            if pbr is None or math.isnan(pbr): pbr = 1.0
-            if per is None or math.isnan(per): per = 12.0
-            
-            # 🎯 밸류에이션 점수 연산 (PBR가중치 + PER가중치) -> 점수가 낮을수록 저평가 알짜주
-            valuation_score = round((pbr * 10) + per, 2)
-            
-            valuation_list.append({
-                "종목명": stock_name,
-                "PBR (배)": round(pbr, 2),
-                "PER (배)": round(per, 2),
-                "밸류에이션 점수": valuation_score
-            })
-        except:
-            continue
-            
-    if not valuation_list:
-        return pd.DataFrame()
-        
-    df_theme = pd.DataFrame(valuation_list)
-    
-    # 🏆 초저평가 종목 순서로 오름차순 정렬
-    df_theme = df_theme.sort_values(by="밸류에이션 점수", ascending=True).reset_index(drop=True)
-    return df_theme
     
 # 🚀 [수정] 1번: 고인물 뺑뺑이 제거! 네이버 금융 '실시간 거래량 급증' 페이지 직접 크롤링
 @st.cache_data(ttl=300, show_spinner=False)
