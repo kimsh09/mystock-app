@@ -523,29 +523,25 @@ for idx, r_name in enumerate(radar_5_stocks):
         st.session_state['current_stock'] = r_name
         st.rerun()
 
-
-# 🟢 243번째 줄 'theme_keyword = st.sidebar.text_input(...)' 부터 아래 if문 전체를 이 코드로 교체하세요!
+# 🟢 2. 사이드바 검색창 UI 부분을 이걸로 통째로 덮어쓰세요!
 
 st.sidebar.markdown("**🔗 섹터/테마 연관 레이더**")
-theme_keyword = st.sidebar.text_input("테마입력", value="", placeholder="예: 반도체, 방산, 원전", label_visibility="collapsed")
+theme_keyword = st.sidebar.text_input("테마입력", value="", placeholder="예: 반도체, 자동차, 원전", label_visibility="collapsed")
 
 if theme_keyword:
-    # 탭이나 메인화면 최상단에 구분선과 함께 저평가 순위표 헤더 생성
-    st.markdown("---")
-    st.subheader(f"📊 [{theme_keyword}] 섹터 내 AI 엄선 저평가 우량주 랭킹")
-    
-    # 🔥 에러의 원인이었던 옛날 함수 대신, 새로 만든 실제 데이터 연산 함수를 정확히 호출합니다!
-    df_theme_result = get_highly_undervalued_theme_stocks(theme_keyword)
-    
-    if not df_theme_result.empty:
-        # 데이터프레임을 테이블 형태로 메인 대시보드에 깔끔하게 출력
-        st.dataframe(
-            df_theme_result.style.background_gradient(cmap='YlGn', subset=['밸류에이션 점수']),
-            use_container_width=True
-        )
-        st.info("💡 **[가치투자 가이드]** '밸류에이션 점수'가 낮을수록 자산(PBR) 및 이익(PER) 체력 대비 크게 저평가된 매력적인 알짜 종목입니다.")
-    else:
-        st.warning("⚠️ 입력하신 테마와 일치하는 핵심 섹터를 찾지 못했습니다. 정확한 키워드(반도체, 이차전지, 바이오, 자동차, 방산, 원전)를 입력해 주세요.")
+    with st.sidebar.spinner("초저평가 주도주 스캔 중..."): 
+        # 위에서 만든 함수를 통해 저평가 순으로 정렬된 종목 리스트 획득
+        matched_themes = get_highly_undervalued_theme_stocks(theme_keyword)
+        
+        if matched_themes:
+            st.sidebar.caption("🏅 AI 엄선: 저평가 우량주 랭킹")
+            # 원래 파트너님 코드처럼 버튼을 생성하여, 클릭 시 메인 화면으로 분석 이동!
+            for rank, t_name in enumerate(matched_themes):
+                if st.sidebar.button(f"💎 {rank+1}위: {t_name}", key=f"theme_v3_{t_name}", use_container_width=True):
+                    st.session_state['current_stock'] = t_name
+                    st.rerun() # 클릭 즉시 화면 새로고침
+        else:
+            st.sidebar.warning("⚠️ 정확한 키워드(반도체, 이차전지, 바이오, 자동차, 방산, 원전)를 입력해 주세요.")
 
 with st.sidebar.expander("⭐ 관심종목 즐겨찾기 명단", expanded=True):
     if st.button(f"➕ 현재 분석 종목 추가", use_container_width=True):
