@@ -15,6 +15,43 @@ import json
 import os
 import math
 
+# =========================================================
+# 2. 로컬 DB 헬퍼 함수 (기존 코드)
+# =========================================================
+def load_local_db(file_name, default_data):
+    if os.path.exists(file_name):
+        with open(file_name, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return default_data
+
+def save_local_db(file_name, data):
+    with open(file_name, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+# =========================================================
+# 3. 🟢 [여기에 새로 추가!] 무한 로딩 방지 데이터 수집 함수
+# =========================================================
+@st.cache_data(ttl=300)  # 5분 동안 결과를 메모리에 저장하여 무한 로딩 방지
+def get_safe_fdr_data(symbol, start_date=None):
+    try:
+        df = fdr.DataReader(symbol, start_date)
+        if df is not None and not df.empty:
+            return df
+        return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def get_safe_yf_data(ticker, period="1mo", timeout=5):
+    try:
+        t = yf.Ticker(ticker)
+        df = t.history(period=period, timeout=timeout)
+        if df is not None and not df.empty:
+            return df
+        return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
 # 파일 기반 영구 저장용 헬퍼 함수
 def load_local_db(file_name, default_data):
     if os.path.exists(file_name):
