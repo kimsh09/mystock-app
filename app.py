@@ -137,7 +137,7 @@ if 'stock_portfolio_db' not in st.session_state:
 @st.cache_data(ttl=300)  # 5분 동안 결과를 메모리에 저장하여 무한 로딩 방지
 def get_safe_fdr_data(symbol, start_date=None):
     try:
-        df = fdr.DataReader(symbol, start_date)
+        df = get_safe_fdr_data(symbol, start_date)
         if df is not None and not df.empty:
             return df
         return pd.DataFrame()
@@ -163,7 +163,7 @@ def get_macro_market_data():
     usd_trend = "안정"
     
     try:
-        df_k = fdr.DataReader('KS11', start=(datetime.today() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        df_k = get_safe_fdr_data('KS11', start=(datetime.today() - timedelta(days=30)).strftime('%Y-%m-%d'))
         if not df_k.empty:
             close_k = float(df_k['Close'].iloc[-1])
             prev_k = float(df_k['Close'].iloc[-2])
